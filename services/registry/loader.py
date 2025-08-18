@@ -21,17 +21,34 @@ class SourceRegistryLoader:
         """Initialize loader with registry path."""
         self.registry_path = registry_path or "data/registry/sources.yaml"
         self.validator = SourceRegistryValidator()
-    
+
+    def _load_raw_data(self) -> Dict[str, Any]:
+        """Load raw registry data from GCS or a local file."""
+        uri = os.getenv("REGISTRY_GCS_URI")
+        if uri and uri.startswith("gs://"):
+            try:
+                from google.cloud import storage
+                logger.info(f"Loading registry from GCS URI: {uri}")
+                b, k = uri.replace("gs://", "").split("/", 1)
+                text = storage.Client().bucket(b).blob(k).download_as_text(encoding="utf-8")
+                return yaml.safe_load(text)
+            except Exception as e:
+                logger.error(f"Failed to load registry from GCS: {e}")
+                raise  # Re-raise after logging
+
+        # Fallback to local file
+        local_path = os.getenv("REGISTRY_LOCAL_PATH", self.registry_path)
+        logger.info(f"Loading registry from local path: {local_path}")
+        if not os.path.exists(local_path):
+            raise FileNotFoundError(f"Registry file not found: {local_path}")
+        
+        with open(local_path, 'r', encoding='utf-8') as f:
+            return yaml.safe_load(f)
+
     def load_registry(self) -> RegistryConfig:
         """Load and validate complete registry configuration."""
         try:
-            # Check if file exists
-            if not os.path.exists(self.registry_path):
-                raise FileNotFoundError(f"Registry file not found: {self.registry_path}")
-            
-            # Load YAML content
-            with open(self.registry_path, 'r', encoding='utf-8') as file:
-                raw_data = yaml.safe_load(file)
+            raw_data = self._load_raw_data()
             
             if not raw_data:
                 raise ValueError("Registry file is empty or invalid")

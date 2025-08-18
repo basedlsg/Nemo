@@ -2,11 +2,12 @@
 
 import logging
 import time
+import os
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 
 from services.database import pool
-from services.embeddings.vertex_client import VertexEmbeddingClient
+from services.embeddings.vertex_client import VertexAIEmbeddingClient
 
 logger = logging.getLogger(__name__)
 
@@ -27,10 +28,10 @@ class HybridSearchService:
             alpha: Weight for vector similarity (0.6 = 60% vector, 40% BM25)
         """
         self.alpha = alpha
-        self.embedding_client = VertexEmbeddingClient()
+        self.embedding_client = VertexAIEmbeddingClient()
         dsn = os.getenv("DATABASE_URL") or os.getenv("ALLOYDB_DSN")
-        logging.info("Retriever DB DSN %s", "is SET" if dsn else "is MISSING")
-        self.pool = pool.get_pool()
+        logging.info("Retriever DB DSN: %s", "SET" if dsn else "MISSING")
+        self.pool = pool
     
     async def search(
         self,
@@ -131,7 +132,7 @@ class HybridSearchService:
             limit               # $7: result limit
         ]
         
-        with self.pool.connection() as conn:
+        with self.pool.get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(query, params)
                 results = cur.fetchall()
@@ -210,7 +211,7 @@ class HybridSearchService:
             start_time = time.time()
             
             # Test database connectivity
-            with self.pool.connection() as conn:
+            with self.pool.get_connection() as conn:
                 with conn.cursor() as cur:
                     cur.execute("SELECT COUNT(*) FROM citations")
                     citation_count = cur.fetchone()[0]
@@ -249,7 +250,7 @@ class HybridSearchService:
             ORDER BY province, doc_class
             """
             
-            with self.pool.connection() as conn:
+            with self.pool.get_connection() as conn:
                 with conn.cursor() as cur:
                     cur.execute(query)
                     results = cur.fetchall()

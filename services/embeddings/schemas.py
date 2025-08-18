@@ -302,11 +302,13 @@ class EmbeddingMetrics(BaseModel):
         }
 
 
+import os
+
 class EmbeddingConfig(BaseModel):
     """Configuration for embedding service."""
     
     # Google Cloud settings
-    project_id: str = Field(..., env="PROJECT_ID")
+    project_id: str = Field(default_factory=lambda: os.getenv("PROJECT_ID"))
     location: str = Field(default="us-central1", env="VERTEX_AI_LOCATION")
     
     # Model settings
@@ -324,7 +326,7 @@ class EmbeddingConfig(BaseModel):
     retry_delay_seconds: int = Field(default=1, env="EMBEDDING_RETRY_DELAY")
     
     # Storage settings
-    alloydb_connection_string: str = Field(..., env="ALLOYDB_CONNECTION_STRING")
+    alloydb_connection_string: str = Field(default_factory=lambda: os.getenv("ALLOYDB_CONNECTION_STRING"))
     vector_table_name: str = Field(default="citation_embeddings", env="VECTOR_TABLE_NAME")
     enable_vector_index: bool = Field(default=True, env="ENABLE_VECTOR_INDEX")
     

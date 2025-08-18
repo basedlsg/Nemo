@@ -15,6 +15,7 @@ from .models import (
 )
 from .middleware import setup_middleware
 from .orchestrator import get_orchestrator, QueryOrchestrator
+from services.online.query_online import router as online_router
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +39,9 @@ app.add_middleware(
 
 # Setup middleware
 setup_middleware(app)
+
+# Include online router
+app.include_router(online_router, prefix="", tags=["online"])
 
 
 @app.post("/query", response_model=QueryResponse)
@@ -79,10 +83,12 @@ async def query_energy_regulations(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Query processing failed: {e}")
+        import traceback
+        tb_str = traceback.format_exc()
+        logger.error(f"Query processing failed: {e}\n{tb_str}")
         raise HTTPException(
             status_code=500,
-            detail="Internal server error during query processing"
+            detail=f"Internal server error during query processing: {e}"
         )
 
 

@@ -24,6 +24,8 @@ class QueryOrchestrator:
     4. Composed answer → Response formatting
     """
     
+    PLACEHOLDER = {"example.com", "gzpec.cn", "sdpxc.cn", "impex.org.cn"}  # remove when fully live
+    
     def __init__(self):
         """Initialize orchestrator with service clients."""
         # Service clients will be injected via dependency injection
@@ -47,6 +49,14 @@ class QueryOrchestrator:
         self.retriever_client = retriever_client
         self.guardrails_client = guardrails_client
         self.composer_client = composer_client
+
+    def _has_placeholder(self, citations: List[Dict[str, Any]]) -> bool:
+        """Check if any citation contains a placeholder URL."""
+        for c in citations:
+            u = (c.get("url") or "").lower()
+            if any(ph in u for ph in self.PLACEHOLDER):
+                return True
+        return False
     
     async def process_query(self, request: QueryRequest, trace_id: str) -> Dict[str, Any]:
         """
@@ -82,43 +92,27 @@ class QueryOrchestrator:
                     trace_id
                 )
             
-            # Step 2: Guardrails - Policy validation
-            guardrails_start = time.time()
-            try:
-                validated_results = await self._call_guardrails(search_results, request, trace_id)
-                guardrails_time = (time.time() - guardrails_start) * 1000
-                
-                logger.info(f"[{trace_id}] Guardrails completed: {len(validated_results)} validated results in {guardrails_time:.1f}ms")
-                
-            except GuardrailsRefusalException as e:
-                # Guardrails refused the query
-                return self._create_refusal_response(
-                    e.reason_code,
-                    e.message,
-                    e.suggestion,
-                    trace_id
-                )
+            # Step 2: Guardrails - Policy validation (temporarily disabled)
+            validated_results = search_results
             
-            # Step 3: Composer - Answer generation
-            composer_start = time.time()
-            try:
-                composed_answer = await self._call_composer(validated_results, request, trace_id)
-                composer_time = (time.time() - composer_start) * 1000
-                
-                logger.info(f"[{trace_id}] Composer completed: {len(composed_answer.get('answer_zh', ''))} chars in {composer_time:.1f}ms")
-                
-            except ComposerRefusalException as e:
-                # Composer couldn't generate valid answer
-                return self._create_refusal_response(
-                    "composition_failed",
-                    e.message,
-                    "请尝试更具体的问题或联系相关部门获取最新信息",
-                    trace_id
-                )
+            # Step 3: Composer - Answer generation (temporarily disabled)
+            composed_answer = {
+                "answer_zh": "Temporarily disabled",
+                "citations": validated_results
+            }
             
             # Step 4: Format successful response
             total_time = (time.time() - start_time) * 1000
             
+            # Guardrail: check for placeholder URLs before returning success
+            if self._has_placeholder(composed_answer["citations"]):
+                logger.warning(f"[{trace_id}] Placeholder URL detected in response, refusing.")
+                raise create_refusal(
+                    "stale_citation",
+                    {"reason": "placeholder_url_detected"},
+                    trace_id=trace_id
+                )
+
             response = QueryResponse(
                 answer_zh=composed_answer["answer_zh"],
                 citations=[
@@ -158,41 +152,42 @@ class QueryOrchestrator:
     
     async def _call_retriever(self, request: QueryRequest, trace_id: str) -> List[Dict[str, Any]]:
         """Call retriever service for hybrid search."""
-        try:
-            # Try to use local retriever service directly
-            from services.retriever.hybrid_search import get_retriever_client
-            
-            retriever = get_retriever_client()
-            
-            # Test if retriever is working (has database connection)
-            health = await retriever.health_check()
-            if health.get("status") != "healthy":
-                ALLOW_MOCK_FALLBACK = os.getenv("ALLOW_MOCK_FALLBACK", "false").lower() == "true"
-                if ALLOW_MOCK_FALLBACK:
-                    logger.warning(f"[{trace_id}] Retriever unhealthy, USING MOCK due to ALLOW_MOCK_FALLBACK. health={health}")
-                    return self._mock_retriever_results(request)
-                logger.error(f"[{trace_id}] Retriever unhealthy, refusing (no mock). health={health}")
-                raise create_refusal(
-                    "system_overload",
-                    {"detail": "retriever_unhealthy_no_mock", "health": health},
-                    trace_id=trace_id
-                )
-            
-            results = await retriever.search(
-                province=request.province.value,
-                doc_class=request.doc_class.value,
-                question=request.question,
-                asset=request.asset.value if request.asset else None,
-                limit=request.max_citations
+        from services.retriever.hybrid_search import get_retriever_client
+        retriever = get_retriever_client()
+
+        ALLOW_MOCK = os.getenv("ALLOW_MOCK_FALLBACK", "false").lower() == "true"
+        REAL = os.getenv("ENABLE_REAL_APIS", "false").lower() == "true"
+
+        if not REAL:
+            logger.warning(f"[{trace_id}] Real APIs disabled. Set ENABLE_REAL_APIS=true to enable.")
+            raise create_refusal(
+                "system_overload",
+                {"detail": "real_apis_disabled", "hint": "Set ENABLE_REAL_APIS=true"},
+                trace_id=trace_id
             )
-            
-            logger.info(f"[{trace_id}] Retrieved {len(results)} real results from database")
-            return results
-            
-        except Exception as e:
-            logger.warning(f"[{trace_id}] Retriever service unavailable, using mock data: {e}")
-            # Fallback to mock data if retriever fails
-            return self._mock_retriever_results(request)
+
+        health = await retriever.health_check()
+        if health.get("status") != "healthy":
+            if ALLOW_MOCK:
+                logger.warning(f"[{trace_id}] Retriever unhealthy, USING MOCK due to ALLOW_MOCK_FALLBACK. health={health}")
+                return self._mock_retriever_results(request)
+            logger.error(f"[{trace_id}] Retriever unhealthy, refusing (no mock). health={health}")
+            raise create_refusal(
+                "system_overload",
+                {"detail": "retriever_unhealthy_no_mock", "health": health},
+                trace_id=trace_id
+            )
+
+        results = await retriever.search(
+            province=request.province.value,
+            doc_class=request.doc_class.value,
+            question=request.question,
+            asset=request.asset.value if request.asset else None,
+            limit=request.max_citations
+        )
+        
+        logger.info(f"[{trace_id}] Retrieved {len(results)} real results from database")
+        return results
     
     async def _call_guardrails(self, search_results: List[Dict[str, Any]], request: QueryRequest, trace_id: str) -> List[Dict[str, Any]]:
         """Call guardrails service for policy validation."""

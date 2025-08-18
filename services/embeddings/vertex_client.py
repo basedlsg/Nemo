@@ -5,12 +5,9 @@ import logging
 import time
 from typing import List, Dict, Any, Optional
 
+import vertexai
 from google.cloud import aiplatform
-try:
-    from google.cloud.aiplatform import TextEmbeddingModel
-except ImportError:
-    # Fallback for different versions of the library
-    from google.cloud.aiplatform.language_models import TextEmbeddingModel
+from vertexai.language_models import TextEmbeddingModel
 from google.api_core import exceptions as gcp_exceptions
 
 from .schemas import EmbeddingModel, EmbeddingVector, EmbeddingRequest, EmbeddingResult, EmbeddingStatus, EmbeddingConfig

@@ -1,5 +1,10 @@
 # Geo-Adaptive Energy Assistant
 
+## Stable Version
+
+This version (`d5d808d`) is a stable, working version of the application. The online-only query path is implemented and the frontend proxy is fixed.
+The application can be run by following the instructions in the "Quick Start" section.
+
 A specialized system that normalizes provincial energy regulations across Chinese provinces and provides compliance guidance only when official first-party citations exist. The system enforces a strict policy of refusing to answer questions without verified official documentation.
 
 ## Overview

@@ -585,7 +585,7 @@ export default function Home() {
           doc_class: docClass,
           asset: asset === "none" ? null : asset,
           question: trimmed,
-          lang: lang === "zh-CN" ? "zh" : "en",
+          lang: lang,
         }),
       });
 

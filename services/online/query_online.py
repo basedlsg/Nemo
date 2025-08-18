@@ -1,4 +1,5 @@
 import os, time, re, json, urllib.parse
+import logging
 from typing import List, Dict, Any
 import requests
 from fastapi import APIRouter, HTTPException
@@ -6,6 +7,8 @@ from pydantic import BaseModel, Field, field_validator
 from dotenv import load_dotenv
 
 load_dotenv()
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # ---- config -----------------------------------------------------------------
 PPLX_API_KEY   = os.getenv("PPLX_API_KEY")
@@ -162,7 +165,9 @@ def query_online(q: Query):
     Online-only path:
       User Q → Perplexity URL candidates → Google CSE verified allowlisted docs → fetch → OCR/extract → score → top-N citations
     """
+    logger.info(f"Received query: {q.dict()}")
     if not ALLOW:
+        logger.error("ALLOWLIST_DOMAINS not set")
         raise HTTPException(status_code=400, detail="ALLOWLIST_DOMAINS not set")
 
     t0 = time.perf_counter()
@@ -172,14 +177,29 @@ def query_online(q: Query):
     full_query = " ".join([t for t in terms if t]).strip() + hint
 
     # 1) Perplexity
-    perpl = perplexity_urls(full_query, max_urls=10)
+    logger.info("Getting URLs from Perplexity...")
+    try:
+        perpl = perplexity_urls(full_query, max_urls=10)
+        logger.info(f"Perplexity returned {len(perpl)} URLs.")
+    except Exception as e:
+        logger.error(f"Error calling Perplexity: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Error calling Perplexity")
 
     # 2) Verify/augment with CSE (allowlist enforced here)
-    candidates = verify_or_search(perpl, full_query)
+    logger.info("Verifying URLs with Google CSE...")
+    try:
+        candidates = verify_or_search(perpl, full_query)
+        logger.info(f"Found {len(candidates)} candidates after CSE verification.")
+    except Exception as e:
+        logger.error(f"Error during CSE verification: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Error during CSE verification")
+
     if not candidates:
+        logger.warning("No first-party citations found.")
         raise HTTPException(status_code=422, detail="no_first_party_citation")
 
     # 3) Fetch + OCR/extract + score
+    logger.info("Fetching, extracting, and scoring documents...")
     scored: List[Dict[str,Any]] = []
     for c in candidates[:8]:  # cap fetches for latency
         url = c["url"]
@@ -193,7 +213,8 @@ def query_online(q: Query):
                     text = _basic_text_from_html(raw)
             else:
                 text = _basic_text_from_html(raw)
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Failed to fetch or process {url}: {e}")
             continue
         sc = score(text, q)
         quote = quote_first(text)
@@ -206,8 +227,10 @@ def query_online(q: Query):
         })
 
     if not scored:
+        logger.error("All fetches or OCR failed.")
         raise HTTPException(status_code=422, detail="fetch_or_ocr_failed")
 
+    logger.info(f"Successfully scored {len(scored)} documents.")
     scored.sort(key=lambda x: x["score"], reverse=True)
     top = scored[:3]
 

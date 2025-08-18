@@ -617,9 +617,29 @@ export default function Home() {
   };
 
   useEffect(() => {
-    fetch("/api/v1/health")
-      .then(r => { setConnected(r.ok); return r.json(); })
-      .catch(() => setConnected(false));
+    let aborted = false;
+
+    async function checkHealth() {
+      async function ping(path: string) {
+        try {
+          const r = await fetch(path, { method: 'GET' });
+          if (!r.ok) throw new Error(String(r.status));
+          const j = await r.json();
+          return Boolean(j && (j.ok === true || j.status === 'ok'));
+        } catch {
+          return false;
+        }
+      }
+
+      const ok =
+        (await ping('/api/v1/health')) ||
+        (await ping('/_health')); // fallback (bypasses rewrite if needed)
+
+      if (!aborted) setConnected(ok);
+    }
+
+    checkHealth();
+    return () => { aborted = true; };
   }, []);
 
   return (

@@ -1,0 +1,33 @@
+# Official Energy Regulation Sources Registry
+# Foundation quartet implementation - Task 4
+# Simplified registry for 3 target provinces per unblocker plan
+
+version: "1.0"
+last_updated: "2025-01-14"
+maintainer: "CC"  # Consulting Committee
+
+# Guangdong Province Sources
+guangdong:
+  - domain: "gzpec.cn"
+    label: "广东电力交易中心"
+    doc_classes: ["market_rules", "dispatch_ops"]
+    cadence: "R/2025-01-01T00:00:00Z/P1D"
+    robots: "respect"
+    owner: "CC"
+# Shandong Province Sources  
+shandong:
+  - domain: "sdpxc.cn"
+    label: "山东电力交易中心"
+    doc_classes: ["market_rules", "grid_connection"]
+    cadence: "R/2025-01-01T00:00:00Z/P1D"
+    robots: "respect"
+    owner: "CC"
+
+# Inner Mongolia Sources
+inner_mongolia:
+  - domain: "impex.org.cn"
+    label: "内蒙古电力交易中心"
+    doc_classes: ["market_rules"]
+    cadence: "R/2025-01-01T00:00:00Z/P2D"
+    robots: "respect"
+    owner: "CC"

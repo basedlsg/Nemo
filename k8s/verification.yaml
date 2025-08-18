@@ -1,0 +1,61 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gaea-verification
+  namespace: gaea
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gaea-verification
+  template:
+    metadata:
+      labels:
+        app: gaea-verification
+    spec:
+      serviceAccountName: gaea-service-account
+      containers:
+      - name: verification
+        image: us-central1-docker.pkg.dev/PROJECT_ID/gaea/verification:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: GAEA_ENV
+          value: "prod"
+        - name: SERVICE_NAME
+          value: "verification"
+        envFrom:
+        - secretRef:
+            name: gaea-secrets
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "125m"
+          limits:
+            memory: "512Mi"
+            cpu: "250m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gaea-verification-service
+  namespace: gaea
+spec:
+  selector:
+    app: gaea-verification
+  ports:
+  - port: 80
+    targetPort: 8080
+  type: ClusterIP

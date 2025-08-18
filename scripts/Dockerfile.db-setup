@@ -1,0 +1,12 @@
+FROM python:3.11-slim
+
+# Install dependencies
+RUN pip install asyncpg
+
+# Copy setup script
+COPY setup-database.py /app/setup-database.py
+
+WORKDIR /app
+
+# Run the setup script
+CMD ["python", "setup-database.py"]

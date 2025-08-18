@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>引用文献包 - {{ metadata.query }}</title>
+    
+    <!-- Chinese Font Support -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&family=Noto+Serif+SC:wght@400;500;700&display=swap" rel="stylesheet">
+    
+    <style>
+        /* Chinese-First Typography */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            font-family: 'Noto Sans SC', 'Microsoft YaHei', '微软雅黑', 'SimSun', '宋体', sans-serif;
+            font-size: 14px;
+            line-height: 1.6;
+            color: #333;
+            background: #fff;
+            
+            /* Chinese Text Rendering */
+            word-break: break-word;
+            line-break: anywhere;
+            text-rendering: optimizeLegibility;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        
+        /* Header Styles */
+        .header {
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: white;
+            padding: 30px 40px;
+            margin-bottom: 30px;
+        }
+        
+        .header h1 {
+            font-family: 'Noto Serif SC', serif;
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 10px;
+            word-break: keep-all;
+        }
+        
+        .header .subtitle {
+            font-size: 16px;
+            opacity: 0.9;
+            margin-bottom: 20px;
+        }
+        
+        .metadata-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+        
+        .metadata-item {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 12px 16px;
+            border-radius: 6px;
+            border-left: 4px solid #fff;
+        }
+        
+        .metadata-label {
+            font-size: 12px;
+            opacity: 0.8;
+            margin-bottom: 4px;
+        }
+        
+        .metadata-value {
+            font-weight: 500;
+            font-size: 14px;
+        }
+        
+        /* Content Container */
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 0 40px 40px;
+        }
+        
+        /* Summary Section */
+        .summary {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            padding: 25px;
+            margin-bottom: 30px;
+        }
+        
+        .summary h2 {
+            font-family: 'Noto Serif SC', serif;
+            font-size: 20px;
+            color: #2c3e50;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 8px;
+        }
+        
+        .summary-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+        
+        .stat-item {
+            text-align: center;
+            padding: 15px;
+            background: white;
+            border-radius: 6px;
+            border: 1px solid #dee2e6;
+        }
+        
+        .stat-number {
+            font-size: 24px;
+            font-weight: 700;
+            color: #3498db;
+            display: block;
+        }
+        
+        .stat-label {
+            font-size: 12px;
+            color: #6c757d;
+            margin-top: 4px;
+        }
+        
+        /* Citations Section */
+        .citations {
+            margin-top: 30px;
+        }
+        
+        .citations h2 {
+            font-family: 'Noto Serif SC', serif;
+            font-size: 22px;
+            color: #2c3e50;
+            margin-bottom: 20px;
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 10px;
+        }
+        
+        .citation {
+            background: white;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            page-break-inside: avoid;
+        }
+        
+        .citation-header {
+            background: #f8f9fa;
+            padding: 15px 20px;
+            border-bottom: 1px solid #e9ecef;
+        }
+        
+        .citation-id {
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            color: #6c757d;
+            margin-bottom: 8px;
+        }
+        
+        .citation-title {
+            font-family: 'Noto Serif SC', serif;
+            font-size: 16px;
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 8px;
+            word-break: keep-all;
+            line-height: 1.4;
+        }
+        
+        .citation-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            font-size: 12px;
+            color: #6c757d;
+        }
+        
+        .citation-meta span {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        
+        .citation-meta .icon {
+            width: 14px;
+            height: 14px;
+            opacity: 0.7;
+        }
+        
+        .citation-content {
+            padding: 20px;
+        }
+        
+        .citation-text {
+            font-size: 14px;
+            line-height: 1.8;
+            color: #333;
+            margin-bottom: 15px;
+            
+            /* Enhanced Chinese Text Rendering */
+            word-break: break-word;
+            line-break: anywhere;
+            text-align: justify;
+            text-justify: inter-ideograph;
+        }
+        
+        .citation-source {
+            padding-top: 15px;
+            border-top: 1px solid #e9ecef;
+            font-size: 12px;
+            color: #6c757d;
+        }
+        
+        .citation-source a {
+            color: #3498db;
+            text-decoration: none;
+            word-break: break-all;
+        }
+        
+        .citation-source a:hover {
+            text-decoration: underline;
+        }
+        
+        /* Footer */
+        .footer {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 2px solid #e9ecef;
+            text-align: center;
+            color: #6c757d;
+            font-size: 12px;
+        }
+        
+        /* Print Styles */
+        @media print {
+            body {
+                font-size: 12px;
+            }
+            
+            .header {
+                background: #2c3e50 !important;
+                -webkit-print-color-adjust: exact;
+                color-adjust: exact;
+            }
+            
+            .citation {
+                page-break-inside: avoid;
+                margin-bottom: 15px;
+            }
+            
+            .citation-content {
+                padding: 15px;
+            }
+            
+            .summary {
+                page-break-after: avoid;
+            }
+        }
+        
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .container {
+                padding: 0 20px 20px;
+            }
+            
+            .header {
+                padding: 20px;
+            }
+            
+            .header h1 {
+                font-size: 24px;
+            }
+            
+            .metadata-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .summary-stats {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .citation-meta {
+                flex-direction: column;
+                gap: 8px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header Section -->
+    <div class="header">
+        <h1>引用文献包</h1>
+        <div class="subtitle">{{ metadata.query }}</div>
+        
+        <div class="metadata-grid">
+            <div class="metadata-item">
+                <div class="metadata-label">省份</div>
+                <div class="metadata-value">{{ metadata.province }}</div>
+            </div>
+            <div class="metadata-item">
+                <div class="metadata-label">资产类型</div>
+                <div class="metadata-value">{{ metadata.asset_type }}</div>
+            </div>
+            <div class="metadata-item">
+                <div class="metadata-label">文档类别</div>
+                <div class="metadata-value">{{ metadata.doc_class }}</div>
+            </div>
+            <div class="metadata-item">
+                <div class="metadata-label">生成时间</div>
+                <div class="metadata-value">{{ generated_timestamp }}</div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="container">
+        <!-- Summary Section -->
+        <div class="summary">
+            <h2>文献包概要</h2>
+            <p>本文献包包含 <strong>{{ total_citations }}</strong> 条相关引用文献，涵盖了 {{ metadata.province }} 地区 {{ metadata.asset_type }} 相关的 {{ metadata.doc_class }} 规定和要求。</p>
+            
+            <div class="summary-stats">
+                <div class="stat-item">
+                    <span class="stat-number">{{ total_citations }}</span>
+                    <div class="stat-label">引用文献总数</div>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-number">{{ metadata.province }}</span>
+                    <div class="stat-label">覆盖省份</div>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-number">{{ metadata.asset_type }}</span>
+                    <div class="stat-label">资产类型</div>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-number">{{ metadata.doc_class }}</span>
+                    <div class="stat-label">文档类别</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Citations Section -->
+        <div class="citations">
+            <h2>引用文献详情</h2>
+            
+            {% for citation in citations %}
+            <div class="citation">
+                <div class="citation-header">
+                    <div class="citation-id">引用ID: {{ citation.citation_id }}</div>
+                    <div class="citation-title">{{ citation.title }}</div>
+                    <div class="citation-meta">
+                        <span>
+                            📅 生效日期: {{ citation.effective_date }}
+                        </span>
+                        <span>
+                            🏛️ 省份: {{ citation.province }}
+                        </span>
+                        <span>
+                            ⚡ 资产: {{ citation.asset_type }}
+                        </span>
+                        {% if citation.page_number %}
+                        <span>
+                            📄 页码: {{ citation.page_number }}
+                        </span>
+                        {% endif %}
+                        {% if citation.confidence_score %}
+                        <span>
+                            🎯 相关度: {{ "%.1f"|format(citation.confidence_score * 100) }}%
+                        </span>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <div class="citation-content">
+                    <div class="citation-text">
+                        {{ citation.content }}
+                    </div>
+                    
+                    {% if citation.source_url %}
+                    <div class="citation-source">
+                        <strong>来源链接:</strong> 
+                        <a href="{{ citation.source_url }}" target="_blank">{{ citation.source_url }}</a>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        
+        <!-- Footer -->
+        <div class="footer">
+            <p>本文献包由地理自适应能源助手生成 | 包ID: {{ metadata.pack_id }}</p>
+            <p>生成时间: {{ generated_timestamp }} | 语言: {{ metadata.language }}</p>
+        </div>
+    </div>
+</body>
+</html>

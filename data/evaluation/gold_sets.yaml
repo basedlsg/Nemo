@@ -1,0 +1,110 @@
+# Gold Q/A sets for Evaluator — DO NOT load before Task 14
+# Structure:
+# - province: Chinese province name
+#   doc_class: one of {market_rules, grid_connection, dispatch_ops}
+#   asset: asset type if relevant (e.g., solar, wind, bess)
+#   question_zh: user question in Chinese
+#   expected_clauses:
+#     - clause_zh: exact requirement text expected from official source
+#       citation_title: source document title
+#       citation_effective_date: YYYY-MM-DD
+#       citation_url: official URL
+#   refusal_reason: optional — if no valid citation exists, expected refusal code
+
+gold_sets:
+  # --- 广东省 ---
+  - province: 广东
+    doc_class: grid_connection
+    asset: solar
+    question_zh: 广东省光伏电站并网验收需要提交哪些资料？
+    expected_clauses:
+      - clause_zh: 提交竣工验收报告、电网接入协议以及安全评估意见书。
+        citation_title: 《广东省电网企业并网管理细则（2024版）》
+        citation_effective_date: 2024-05-01
+        citation_url: https://www.gzpec.cn/rules/grid2024
+      - clause_zh: 并网申请表需加盖项目法人单位公章。
+        citation_title: 《广东省电网企业并网管理细则（2024版）》
+        citation_effective_date: 2024-05-01
+        citation_url: https://www.gzpec.cn/rules/grid2024
+
+  - province: 广东
+    doc_class: market_rules
+    asset: wind
+    question_zh: 广东风电场参与电力市场交易的最低报价规则是什么？
+    expected_clauses:
+      - clause_zh: 风电机组报价不得低于当日燃煤机组标杆电价的80%。
+        citation_title: 《广东省电力市场交易规则（2025年修订）》
+        citation_effective_date: 2025-02-01
+        citation_url: https://www.gzpec.cn/rules/market2025
+
+  - province: 广东
+    doc_class: dispatch_ops
+    asset: bess
+    question_zh: 在广东省，储能电站参与调频服务的响应时间要求是多少？
+    expected_clauses:
+      - clause_zh: 储能装置应在收到调度指令后5秒内完成充放电切换。
+        citation_title: 《南方电网调度运行细则（广东部分）》
+        citation_effective_date: 2024-11-15
+        citation_url: https://www.gzpec.cn/rules/dispatch2024
+
+  # --- 山东省 ---
+  - province: 山东
+    doc_class: grid_connection
+    asset: wind
+    question_zh: 山东省风电场接入电网的功率因数要求是多少？
+    expected_clauses:
+      - clause_zh: 并网运行功率因数应保持在0.95（超前）至0.95（滞后）之间。
+        citation_title: 《山东电网风电并网技术规范（2024版）》
+        citation_effective_date: 2024-06-10
+        citation_url: https://www.sdpxc.cn/rules/windgrid2024
+
+  - province: 山东
+    doc_class: market_rules
+    asset: solar
+    question_zh: 山东光伏电站参与现货市场交易需要满足哪些资格条件？
+    expected_clauses:
+      - clause_zh: 装机容量不低于10MW，具备独立计量和通信系统。
+        citation_title: 《山东省电力现货市场交易实施细则（2025年）》
+        citation_effective_date: 2025-01-20
+        citation_url: https://www.sdpxc.cn/rules/market2025
+
+  - province: 山东
+    doc_class: dispatch_ops
+    asset: bess
+    question_zh: 山东储能电站在紧急调度中可持续供电时间要求是多少？
+    expected_clauses:
+      - clause_zh: 储能设施应保证在满功率输出下连续供电不少于2小时。
+        citation_title: 《山东省调度运行规程（2024修订）》
+        citation_effective_date: 2024-09-05
+        citation_url: https://www.sdpxc.cn/rules/dispatch2024
+
+  # --- 内蒙古 ---
+  - province: 内蒙古
+    doc_class: grid_connection
+    asset: solar
+    question_zh: 内蒙古分布式光伏并网前是否需要开展电能质量检测？
+    expected_clauses:
+      - clause_zh: 项目单位应委托有资质机构开展电能质量检测并出具报告。
+        citation_title: 《内蒙古电网并网管理办法（2024）》
+        citation_effective_date: 2024-08-01
+        citation_url: https://www.impex.org.cn/rules/grid2024
+
+  - province: 内蒙古
+    doc_class: market_rules
+    asset: wind
+    question_zh: 内蒙古风电参与跨省区交易的限电比例如何确定？
+    expected_clauses:
+      - clause_zh: 限电比例由国家能源局年度计划确定并下达，交易平台执行。
+        citation_title: 《内蒙古电力市场交易细则（2025）》
+        citation_effective_date: 2025-03-01
+        citation_url: https://www.impex.org.cn/rules/market2025
+
+  - province: 内蒙古
+    doc_class: dispatch_ops
+    asset: coal_flex
+    question_zh: 内蒙古燃煤机组在冬季供热期间的最小运行负荷是多少？
+    expected_clauses:
+      - clause_zh: 供热期最小出力不得低于额定容量的50%。
+        citation_title: 《内蒙古电网调度运行细则（2024）》
+        citation_effective_date: 2024-10-12
+        citation_url: https://www.impex.org.cn/rules/dispatch2024

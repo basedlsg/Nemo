@@ -1,0 +1,71 @@
+{
+  "total_tests": 7,
+  "passed_tests": 5,
+  "success_rate": 0.7142857142857143,
+  "all_passed": false,
+  "results": {
+    "Service Health": true,
+    "Root Endpoint": true,
+    "Provinces API": true,
+    "Assets API": true,
+    "Doc Classes API": true,
+    "Database Connectivity": false,
+    "Real Data Queries": false
+  },
+  "test_details": [
+    {
+      "test": "Health Check",
+      "success": true,
+      "details": "Status: healthy",
+      "timestamp": "2025-08-15T04:58:04.222988"
+    },
+    {
+      "test": "Root Endpoint",
+      "success": true,
+      "details": "Found 6 features",
+      "timestamp": "2025-08-15T04:58:04.304224"
+    },
+    {
+      "test": "Provinces Endpoint",
+      "success": true,
+      "details": "Found 3 provinces: ['guangdong', 'shandong', 'inner_mongolia']",
+      "timestamp": "2025-08-15T04:58:04.362259"
+    },
+    {
+      "test": "Assets Endpoint",
+      "success": true,
+      "details": "Found 4 assets: ['wind', 'solar', 'bess', 'coal_flex']",
+      "timestamp": "2025-08-15T04:58:04.425111"
+    },
+    {
+      "test": "Doc Classes Endpoint",
+      "success": true,
+      "details": "Found 3 doc classes: ['market_rules', 'grid_connection', 'dispatch_ops']",
+      "timestamp": "2025-08-15T04:58:04.511338"
+    },
+    {
+      "test": "Database Connectivity",
+      "success": false,
+      "details": "Exception: ",
+      "timestamp": "2025-08-15T04:58:34.788624"
+    },
+    {
+      "test": "Query: Guangdong Solar Grid Connection",
+      "success": false,
+      "details": "Exception: ",
+      "timestamp": "2025-08-15T04:59:05.785262"
+    },
+    {
+      "test": "Query: Shandong Wind Grid Connection",
+      "success": false,
+      "details": "Exception: ",
+      "timestamp": "2025-08-15T04:59:35.794745"
+    },
+    {
+      "test": "Query: Inner Mongolia Coal Flexibility",
+      "success": false,
+      "details": "Exception: ",
+      "timestamp": "2025-08-15T05:00:06.786202"
+    }
+  ]
+}

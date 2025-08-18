@@ -4,7 +4,7 @@ const nextConfig = {
     return [
       {
         source: '/api/v1/:path*',
-        destination: 'http://localhost:3004/:path*', // backend port
+        destination: 'http://localhost:3004/api/v1/:path*', // KEEP /api/v1
       },
     ];
   },

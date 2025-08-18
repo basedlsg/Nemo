@@ -130,19 +130,41 @@ def extract_text_any(raw: bytes, src_url: str) -> str:
 
     return _basic_text_from_html(raw)
 
+STOP_WORDS = ("登录", "首页", "平台", "门户网站", "政务服务", "无障碍", "网站地图")
+
 def _sanitize_text_for_ui(text: str) -> str:
-    # strip classic binary signatures / office packages
     if "%PDF-" in text or "PK\u0003\u0004" in text or "Content_Types" in text:
         return ""
-    # collapse whitespace; keep it short for the top bullets
     text = re.sub(r"\s+", " ", text).strip()
+    for sw in STOP_WORDS:
+        # drop very short quotes that are clearly nav labels
+        if text.startswith(sw) and len(text) < 30:
+            return ""
     return text[:400]
 
 def quote_first(text: str) -> str:
-    # Return first 1-2 short sentences; keep “quote-first” vibe
-    # We avoid paraphrasing; this is a light extract, not a rewrite
-    lines = [l.strip() for l in re.split(r"[。\n.!?]", text) if l.strip()]
-    return "；".join(lines[:2])
+    cand = [l.strip() for l in re.split(r"[。\n.!?]", text) if l.strip()]
+    for c in cand:
+        c = _sanitize_text_for_ui(c)
+        if c and len(c) >= 12:
+            return c
+    return ""
+
+PROVINCE_SITES = {
+    "广东": ["gd.gov.cn", "gz.gov.cn", "zhaoqing.gov.cn", "shenzhen.gov.cn", "foshan.gov.cn", "zhuhai.gov.cn"],
+    "guangdong": ["gd.gov.cn","gz.gov.cn","shenzhen.gov.cn","foshan.gov.cn","zhuhai.gov.cn"],
+    # add more as you go; these are hints, allowlist still enforces 1st-party
+}
+
+def _province_query_boost(q: Query) -> str:
+    # turn province into site: filters
+    doms = PROVINCE_SITES.get(q.province.lower(), []) or PROVINCE_SITES.get(q.province, [])
+    site_clause = " OR ".join([f"site:{d}" for d in doms]) if doms else ""
+    # strong regulatory keywords (Chinese, even if the user typed English)
+    core = "并网 接入 申请 材料 资料 清单 光伏 发电 管理 办法 规定 通知 指南"
+    # assemble
+    pieces = [q.province, q.doc_class, q.asset or "", q.question, core, site_clause]
+    return " ".join([p for p in pieces if p]).strip()
 
 def score(text: str, q: Query) -> float:
     # Simple scoring: term frequency on question + province + doc_class + asset
@@ -201,6 +223,13 @@ def perplexity_urls(query: str, max_urls: int = 10) -> List[str]:
 
 # --- GOOGLE CSE --------------------------------------------------------------
 
+REQUIRED_TOKENS = ["并网", "接入", "申请", "材料", "资料", "清单", "光伏", "许可", "报审", "办理"]
+
+def _passes_policy(text: str) -> bool:
+    hay = text
+    hits = sum(1 for t in REQUIRED_TOKENS if t in hay)
+    return hits >= 2  # require at least two policy terms
+
 def cse_items(query: str, num: int = 10) -> List[Dict[str, Any]]:
     if not GOOGLE_API_KEY or not GOOGLE_CSE_ID:
         raise HTTPException(status_code=503, detail="cse_key_or_id_missing")
@@ -222,11 +251,12 @@ def cse_items(query: str, num: int = 10) -> List[Dict[str, Any]]:
     return r.json().get("items", []) or []
 
 
-def verify_or_search(perpl_urls: List[str], query: str) -> List[Dict[str, Any]]:
+def verify_or_search(perpl_urls: List[str], query: str, q: Query) -> List[Dict[str, Any]]:
     # Prefer Perplexity URLs that pass allowlist
     prefer = [{"title": "", "link": u, "snippet": ""} for u in perpl_urls if _allowed(u)]
     # Augment with CSE (filter by allowlist)
-    items = cse_items(query, num=10)
+    full_query = _province_query_boost(q)
+    items = cse_items(full_query, num=10)
     hits, seen = [], set()
     for it in prefer + items:
         link = it.get("link") or it.get("url") or ""
@@ -296,7 +326,7 @@ def query_online(q: Query):
     perpl = perplexity_urls(full_query, max_urls=10)
 
     # 2) Google CSE + allowlist (hard requirement)
-    candidates = verify_or_search(perpl, full_query)
+    candidates = verify_or_search(perpl, full_query, q)
     if not candidates:
         raise HTTPException(
             status_code=422,
@@ -314,6 +344,8 @@ def query_online(q: Query):
         try:
             raw = _http_get(url, timeout=25)
             text = extract_text_any(raw, url)
+            if not _passes_policy(text):
+                continue
             title = c.get("title") or _title_from_html(raw) or "（无标题）"
         except Exception:
             continue

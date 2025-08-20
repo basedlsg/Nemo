@@ -574,7 +574,8 @@ export default function Home() {
     const traceId = `ui-${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
 
     try {
-      const res = await fetch("/api/v1/query", {
+      const BASE = process.env.NEXT_PUBLIC_API_BASE || '';
+      const res = await fetch(`${BASE}/api/v1/query`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -617,9 +618,17 @@ export default function Home() {
   };
 
   useEffect(() => {
-    fetch("/api/v1/health")
-      .then(r => { setConnected(r.ok); return r.json(); })
-      .catch(() => setConnected(false));
+    const base = process.env.NEXT_PUBLIC_API_BASE ?? "";
+    const candidates = [`${base}/api/v1/health`, `${base}/_health`];
+    for (const u of candidates) {
+      try {
+        fetch(u, { cache: "no-store" }).then(r => {
+          if (r.ok) {
+            setConnected(true);
+          }
+        });
+      } catch {}
+    }
   }, []);
 
   return (

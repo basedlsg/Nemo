@@ -1,3 +1,163 @@
+import os, time, re, urllib.parse
+import logging
+from typing import List, Dict, Any, Optional
+import requests
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, Field, field_validator
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# ---- config -----------------------------------------------------------------
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+GOOGLE_CSE_ID = os.getenv("GOOGLE_CSE_ID")
+ALLOW = set(filter(None, os.getenv("ALLOWLIST_DOMAINS", "").lower().split(",")))
+
+# ---- models -----------------------------------------------------------------
+class Query(BaseModel):
+    province: str
+    doc_class: str
+    asset: Optional[str] = None
+    question: str
+    lang: str = Field(default="zh-CN")
+
+    @field_validator("lang")
+    @classmethod
+    def _lang_ok(cls, v):
+        if v not in ("zh-CN", "en"):
+            raise ValueError("lang must be 'zh-CN' or 'en'")
+        return v
+
+class Citation(BaseModel):
+    title: str
+    url: str
+    snippet: str
+    effective_date: Optional[str] = None
+
+class QueryResponse(BaseModel):
+    mode: str
+    elapsed_ms: int
+    answer_zh: str
+    citations: List[Citation]
+
+# ---- helpers ----------------------------------------------------------------
+_UA = {"User-Agent": "Mozilla/5.0 (GAEA-online)"}
+
+def _domain(url: str) -> str:
+    try:
+        d = urllib.parse.urlparse(url).netloc.lower()
+        for p in ("www.", "m.", "wap."):
+            if d.startswith(p):
+                d = d[len(p):]
+        return d
+    except Exception:
+        return ""
+
+def _allowed(url: str) -> bool:
+    d = _domain(url)
+    return any(d == a or d.endswith("." + a) for a in ALLOW)
+
+def _http_get(url: str, timeout: int = 20) -> bytes:
+    r = requests.get(url, timeout=timeout, headers=_UA, allow_redirects=True)
+    r.raise_for_status()
+    return r.content
+
+_WS = re.compile(r"\s+")
+def _to_text(html_bytes: bytes) -> str:
+    text = html_bytes.decode("utf-8", errors="ignore")
+    text = re.sub(r"(?is)<script[^>]*>.*?</script>", " ", text)
+    text = re.sub(r"(?is)<style[^>]*>.*?</style>", " ", text)
+    text = re.sub(r"(?is)<[^>]+>", " ", text)
+    text = _WS.sub(" ", text)
+    return text.strip()
+
+def _extract_date(text: str) -> Optional[str]:
+    m = re.search(r"(\d{4}-\d{1,2}-\d{1,2})", text)
+    if m:
+        return m.group(1)
+    m = re.search(r"(\d{4})年(\d{1,2})月(\d{1,2})日", text)
+    if m:
+        return f"{m.group(1)}-{int(m.group(2)):02d}-{int(m.group(3)):02d}"
+    return None
+
+def _zh_snippet(text: str, query: str, max_len: int = 120) -> str:
+    keys = [k for k in re.split(r"[，。；、\s]", query) if k]
+    for k in keys:
+        i = text.find(k)
+        if i != -1:
+            start = max(0, i - 40)
+            end = min(len(text), i + 80)
+            return text[start:end].strip()
+    return text[:max_len].strip()
+
+def _google_cse_search(q: str) -> List[Dict[str, Any]]:
+    if not GOOGLE_API_KEY or not GOOGLE_CSE_ID:
+        logger.warning("GOOGLE_API_KEY/GOOGLE_CSE_ID missing")
+        return []
+    url = "https://www.googleapis.com/customsearch/v1?" + urllib.parse.urlencode({
+        "key": GOOGLE_API_KEY,
+        "cx": GOOGLE_CSE_ID,
+        "q": q,
+        "lr": "lang_zh",
+        "safe": "off",
+        "fields": "items(title,link,snippet)"
+    })
+    r = requests.get(url, headers=_UA, timeout=30)
+    r.raise_for_status()
+    return r.json().get("items", []) or []
+
+def _build_query_text(payload: Query) -> str:
+    parts = [payload.province, payload.doc_class]
+    if payload.asset:
+        parts.append(payload.asset)
+    parts.append(payload.question)
+    return " ".join([p for p in parts if p])
+
+# ---- router -----------------------------------------------------------------
+router = APIRouter()
+
+@router.post("/query", response_model=QueryResponse)
+def query_online(payload: Query) -> QueryResponse:
+    t0 = time.time()
+    if not ALLOW:
+        raise HTTPException(status_code=400, detail="ALLOWLIST_DOMAINS not set")
+
+    qtext = _build_query_text(payload)
+
+    items = _google_cse_search(qtext)
+    citations: List[Citation] = []
+    for it in items:
+        url = (it.get("link") or "").strip()
+        title = (it.get("title") or "").strip()
+        if not url or not _allowed(url):
+            continue
+        try:
+            raw = _http_get(url, timeout=25)
+            text = _to_text(raw)
+            if not text:
+                continue
+            citations.append(Citation(
+                title=title,
+                url=url,
+                snippet=_zh_snippet(text, payload.question),
+                effective_date=_extract_date(text)
+            ))
+        except Exception as e:
+            logger.warning(f"fetch failed for {url}: {e}")
+        if len(citations) >= 5:
+            break
+
+    if citations:
+        bullets = [f"• “{c.snippet}” — {c.title}" for c in citations[:5]]
+        answer_zh = "\n".join(bullets)
+    else:
+        answer_zh = "未从许可来源中检索到可用答案，请调整问题或放宽条件。"
+
+    return QueryResponse(
+        mode="web_only",
+        elapsed_ms=int((time.time() - t0) * 1000),
+        answer_zh=answer_zh,
+        citations=citations,
+    )
 import os, time, re, json, urllib.parse
 import logging
 from typing import List, Dict, Any
@@ -17,12 +177,7 @@ GOOGLE_CSE_ID  = os.getenv("GOOGLE_CSE_ID")
 ALLOW = set(filter(None, os.getenv("ALLOWLIST_DOMAINS","").lower().split(",")))
 
 # ---- optional OCR (use your in-repo client if available) --------------------
-try:
-    # assume your repo exposes this; otherwise we fallback below
-    from services.ocr.client import ocr_extract  # def ocr_extract(bytes|url)->str
-    HAS_OCR_CLIENT = True
-except Exception:
-    HAS_OCR_CLIENT = False
+HAS_OCR_CLIENT = False
 
 # ---- models -----------------------------------------------------------------
 class Query(BaseModel):
@@ -65,6 +220,13 @@ def _basic_text_from_html(html: bytes) -> str:
         return txt.decode("utf-8","ignore")
     except:
         return txt.decode("gb18030","ignore")
+
+def _sanitize_text_for_ui(text: str) -> str:
+    if not text: return ""
+    text = text.replace("\x00", "")
+    text = re.sub(r"[\x00-\x1F\x7F]", " ", text)  # control chars
+    text = re.sub(r"\s{2,}", " ", text)
+    return text.strip()
 
 # ---- Perplexity (simple URL discovery) --------------------------------------
 def perplexity_urls(query: str, max_urls: int = 10) -> List[str]:
@@ -152,14 +314,9 @@ def quote_first(text: str) -> str:
     lines = [l.strip() for l in re.split(r"[。\n]", text) if l.strip()]
     return "；".join(lines[:2])
 
-# ---- FastAPI router ----------------------------------------------------------
 router = APIRouter()
 
-@router.get("/health_online")
-def health_check():
-    return {"status": "ok"}
-
-@router.post("/query_online")
+@router.post("/query")
 def query_online(q: Query):
     """
     Online-only path:
@@ -235,12 +392,21 @@ def query_online(q: Query):
     top = scored[:3]
 
     elapsed_ms = int((time.perf_counter()-t0)*1000)
-    # Quote-first, minimal glue, verbatim-ish clauses:
-    answer_zh = "；".join([t["quote"] for t in top if t["quote"]])
+    
+    # Sanitize outputs
+    answer_zh = "；".join([_sanitize_text_for_ui(t["quote"]) for t in top if t.get("quote")]) or "（见引用条款）"
+    sanitized_citations = [
+        {
+            "title": _sanitize_text_for_ui(t.get("title", "")),
+            "url": t["url"],
+            "snippet": _sanitize_text_for_ui(t.get("snippet", "")),
+        }
+        for t in top
+    ]
 
     return {
         "mode": "online_only",
         "elapsed_ms": elapsed_ms,
-        "answer_zh": answer_zh or "（见引用条款）",
-        "citations": [{"title": t["title"], "url": t["url"], "snippet": t["snippet"]} for t in top]
+        "answer_zh": _sanitize_text_for_ui(answer_zh),
+        "citations": sanitized_citations,
     }

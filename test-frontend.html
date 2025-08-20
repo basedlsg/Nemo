@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gaea Gateway API Test</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #555;
+        }
+        select, input, textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+        textarea {
+            height: 100px;
+            resize: vertical;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            width: 100%;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .result {
+            margin-top: 30px;
+            padding: 20px;
+            border-radius: 5px;
+            white-space: pre-wrap;
+            font-family: monospace;
+            font-size: 14px;
+        }
+        .success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .loading {
+            text-align: center;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🌍 Gaea Gateway API Test</h1>
+        
+        <div class="form-group">
+            <label for="province">省份 (Province):</label>
+            <select id="province">
+                <option value="广东">广东 (Guangdong)</option>
+                <option value="山东">山东 (Shandong)</option>
+                <option value="内蒙古">内蒙古 (Inner Mongolia)</option>
+                <option value="上海">上海 (Shanghai)</option>
+                <option value="北京">北京 (Beijing)</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="docClass">文档类型 (Document Class):</label>
+            <select id="docClass">
+                <option value="光伏">光伏 (Photovoltaic)</option>
+                <option value="风电">风电 (Wind Power)</option>
+                <option value="储能">储能 (Energy Storage)</option>
+                <option value="并网">并网 (Grid Connection)</option>
+                <option value="市场">市场 (Market Rules)</option>
+                <option value="调度">调度 (Dispatch Operations)</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="asset">资产类型 (Asset Type):</label>
+            <select id="asset">
+                <option value="分布式">分布式 (Distributed)</option>
+                <option value="集中式">集中式 (Centralized)</option>
+                <option value="户用">户用 (Residential)</option>
+                <option value="工商业">工商业 (Commercial & Industrial)</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="question">问题 (Question):</label>
+            <textarea id="question" placeholder="请输入您的问题...">光伏电站并网需要什么资料？</textarea>
+        </div>
+
+        <button onclick="submitQuery()" id="submitBtn">查询 (Query)</button>
+
+        <div id="result" class="result" style="display: none;"></div>
+    </div>
+
+    <script>
+        const API_URL = 'https://gaea-gateway-783449213067.us-central1.run.app/api/v1/query';
+
+        async function submitQuery() {
+            const submitBtn = document.getElementById('submitBtn');
+            const resultDiv = document.getElementById('result');
+            
+            // Get form values
+            const province = document.getElementById('province').value;
+            const docClass = document.getElementById('docClass').value;
+            const asset = document.getElementById('asset').value;
+            const question = document.getElementById('question').value;
+
+            if (!question.trim()) {
+                alert('请输入问题');
+                return;
+            }
+
+            // Show loading
+            submitBtn.disabled = true;
+            submitBtn.textContent = '查询中... (Querying...)';
+            resultDiv.style.display = 'block';
+            resultDiv.className = 'result loading';
+            resultDiv.textContent = '正在查询，请稍候... (Querying, please wait...)';
+
+            try {
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        province: province,
+                        doc_class: docClass,
+                        asset: asset,
+                        question: question,
+                        lang: 'zh-CN'
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    resultDiv.className = 'result success';
+                    resultDiv.textContent = JSON.stringify(data, null, 2);
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.textContent = `Error ${response.status}: ${JSON.stringify(data, null, 2)}`;
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.textContent = `Network Error: ${error.message}`;
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = '查询 (Query)';
+            }
+        }
+
+        // Allow Enter key to submit
+        document.getElementById('question').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && e.ctrlKey) {
+                submitQuery();
+            }
+        });
+    </script>
+</body>
+</html>

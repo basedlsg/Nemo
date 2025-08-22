@@ -6,7 +6,8 @@ from enum import Enum
 from typing import List, Optional, Dict, Any, Union
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, Field, validator, root_validator
+from pydantic import BaseModel, Field, validator, root_validator, model_validator
+from typing import Literal
 
 
 class Province(str, Enum):
@@ -150,12 +151,14 @@ class QueryRequest(BaseModel):
         
         return v
     
-    @root_validator
+    @model_validator(mode='before')
+    @classmethod
     def validate_province_enabled(cls, values):
         """Ensure province is currently enabled."""
-        province = values.get("province")
-        if province and not Province.is_enabled(province):
-            raise ValueError(f"Province {province} is not currently enabled")
+        if isinstance(values, dict):
+            province = values.get("province")
+            if province and not Province.is_enabled(province):
+                raise ValueError(f"Province {province} is not currently enabled")
         return values
     
     def generate_fingerprint(self) -> str:
@@ -202,20 +205,19 @@ class QueryResponse(BaseModel):
 class RefusalResponse(BaseModel):
     """Refusal response when no official citations exist."""
     
-    status: str = Field(default="refused", const=True)
+    status: Literal["refused"] = "refused"
     reason: RefusalReason
-    policy: str = Field(default="first_party_citation_required", const=True)
+    policy: Literal["first_party_citation_required"] = "first_party_citation_required"
     message_zh: Optional[str] = None
     ingestion_request_id: Optional[UUID] = None
     generated_at: datetime = Field(default_factory=datetime.utcnow)
     
-    @root_validator
-    def set_chinese_message(cls, values):
+    @model_validator(mode='after')
+    def set_chinese_message(self):
         """Set Chinese message based on refusal reason."""
-        reason = values.get("reason")
-        if reason and not values.get("message_zh"):
-            values["message_zh"] = reason.message_zh()
-        return values
+        if self.reason and not self.message_zh:
+            self.message_zh = self.reason.message_zh()
+        return self
     
     class Config:
         use_enum_values = True
@@ -247,14 +249,14 @@ class CompliancePack(BaseModel):
             raise ValueError(f"Pack status must be one of: {valid_statuses}")
         return v
     
-    @root_validator
-    def set_expiration(cls, values):
+    @model_validator(mode='after')
+    def set_expiration(self):
         """Set default expiration time if not provided."""
-        if not values.get("expires_at") and values.get("generated_at"):
+        if not self.expires_at and self.generated_at:
             # Default expiration: 7 days from generation
             from datetime import timedelta
-            values["expires_at"] = values["generated_at"] + timedelta(days=7)
-        return values
+            self.expires_at = self.generated_at + timedelta(days=7)
+        return self
     
     def is_expired(self) -> bool:
         """Check if pack has expired."""

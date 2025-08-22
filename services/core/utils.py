@@ -7,7 +7,7 @@ from typing import Optional, List, Dict, Any, Union
 from uuid import UUID, uuid4
 
 import jieba
-from opencc import OpenCC
+# from opencc import OpenCC  # Temporarily commented out due to build issues
 
 
 def generate_uuid() -> UUID:
@@ -29,8 +29,8 @@ def normalize_text(text: str, remove_punctuation: bool = False) -> str:
         return ""
     
     # Convert traditional Chinese to simplified
-    cc = OpenCC('t2s')  # Traditional to Simplified
-    text = cc.convert(text)
+    # cc = OpenCC('t2s')  # Traditional to Simplified - temporarily disabled
+    # text = cc.convert(text)  # Temporarily disabled
     
     # Remove extra whitespace
     text = re.sub(r'\s+', ' ', text).strip()

@@ -1,33 +1,150 @@
-# Official Energy Regulation Sources Registry
-# Foundation quartet implementation - Task 4
-# Simplified registry for 3 target provinces per unblocker plan
+# Canonical government policy libraries and portals per province
+# These are the most authoritative sources for Chinese energy regulations
+# Prioritize these for discovery before general web search
 
-version: "1.0"
-last_updated: "2025-01-14"
-maintainer: "CC"  # Consulting Committee
-
-# Guangdong Province Sources
 guangdong:
-  - domain: "gzpec.cn"
-    label: "广东电力交易中心"
-    doc_classes: ["market_rules", "dispatch_ops"]
-    cadence: "R/2025-01-01T00:00:00Z/P1D"
-    robots: "respect"
-    owner: "CC"
-# Shandong Province Sources  
-shandong:
-  - domain: "sdpxc.cn"
-    label: "山东电力交易中心"
-    doc_classes: ["market_rules", "grid_connection"]
-    cadence: "R/2025-01-01T00:00:00Z/P1D"
-    robots: "respect"
-    owner: "CC"
+  - name: "广东省人民政府文件库"
+    url: "https://www.gd.gov.cn/zwgk/wjk/"
+    type: "policy_library"
+    priority: "high"
+    doc_classes: ["regulations", "project_approval", "technical_standards"]
 
-# Inner Mongolia Sources
+  - name: "广东省发改委政策文件"
+    url: "https://drc.gd.gov.cn/zwgk/"
+    type: "agency_portal"
+    priority: "high"
+    doc_classes: ["grid_connection", "project_approval", "market_rules"]
+
+  - name: "广东省能源局文件"
+    url: "https://meei.gd.gov.cn/zwgk/"
+    type: "agency_portal"
+    priority: "high"
+    doc_classes: ["technical_standards", "grid_connection", "environmental_protection"]
+
+  - name: "广东省工信厅政策文件"
+    url: "https://gddrc.gd.gov.cn/zwgk/"
+    type: "agency_portal"
+    priority: "medium"
+    doc_classes: ["technical_standards", "project_approval"]
+
+beijing:
+  - name: "北京市人民政府文件库"
+    url: "https://www.beijing.gov.cn/zhengce/"
+    type: "policy_library"
+    priority: "high"
+    doc_classes: ["regulations", "project_approval"]
+
+  - name: "北京市发改委文件"
+    url: "https://fgw.beijing.gov.cn/"
+    type: "agency_portal"
+    priority: "high"
+    doc_classes: ["grid_connection", "market_rules", "project_approval"]
+
+  - name: "北京市经济信息化局"
+    url: "https://jxw.beijing.gov.cn/"
+    type: "agency_portal"
+    priority: "medium"
+    doc_classes: ["technical_standards", "grid_connection"]
+
+shanghai:
+  - name: "上海市人民政府文件库"
+    url: "https://www.shanghai.gov.cn/nw12344/"
+    type: "policy_library"
+    priority: "high"
+    doc_classes: ["regulations", "project_approval"]
+
+  - name: "上海市发改委文件"
+    url: "https://fgw.sh.gov.cn/"
+    type: "agency_portal"
+    priority: "high"
+    doc_classes: ["grid_connection", "market_rules"]
+
+  - name: "上海市经信委文件"
+    url: "https://jxw.sh.gov.cn/"
+    type: "agency_portal"
+    priority: "medium"
+    doc_classes: ["technical_standards", "project_approval"]
+
+shandong:
+  - name: "山东省人民政府文件库"
+    url: "https://www.shandong.gov.cn/"
+    type: "policy_library"
+    priority: "high"
+    doc_classes: ["regulations", "project_approval"]
+
+  - name: "山东省发改委文件"
+    url: "https://drc.shandong.gov.cn/"
+    type: "agency_portal"
+    priority: "high"
+    doc_classes: ["grid_connection", "market_rules"]
+
+  - name: "山东省工信厅文件"
+    url: "https://gxt.shandong.gov.cn/"
+    type: "agency_portal"
+    priority: "medium"
+    doc_classes: ["technical_standards", "project_approval"]
+
 inner_mongolia:
-  - domain: "impex.org.cn"
-    label: "内蒙古电力交易中心"
-    doc_classes: ["market_rules"]
-    cadence: "R/2025-01-01T00:00:00Z/P2D"
-    robots: "respect"
-    owner: "CC"
+  - name: "内蒙古自治区人民政府文件库"
+    url: "https://www.nmg.gov.cn/"
+    type: "policy_library"
+    priority: "high"
+    doc_classes: ["regulations", "project_approval"]
+
+  - name: "内蒙古发改委文件"
+    url: "https://drc.nmg.gov.cn/"
+    type: "agency_portal"
+    priority: "high"
+    doc_classes: ["grid_connection", "market_rules"]
+
+fujian:
+  - name: "福建省人民政府文件库"
+    url: "https://www.fujian.gov.cn/"
+    type: "policy_library"
+    priority: "high"
+    doc_classes: ["regulations", "project_approval"]
+
+  - name: "福建省发改委文件"
+    url: "https://fgw.fujian.gov.cn/"
+    type: "agency_portal"
+    priority: "high"
+    doc_classes: ["grid_connection", "market_rules"]
+
+sichuan:
+  - name: "四川省人民政府文件库"
+    url: "https://www.sichuan.gov.cn/"
+    type: "policy_library"
+    priority: "high"
+    doc_classes: ["regulations", "project_approval"]
+
+  - name: "四川省发改委文件"
+    url: "https://drc.sc.gov.cn/"
+    type: "agency_portal"
+    priority: "high"
+    doc_classes: ["grid_connection", "market_rules"]
+
+# National-level sources (fallback for any province)
+national:
+  - name: "国家发改委文件"
+    url: "https://www.ndrc.gov.cn/"
+    type: "national_agency"
+    priority: "high"
+    doc_classes: ["regulations", "technical_standards", "market_rules"]
+
+  - name: "国家能源局文件"
+    url: "https://www.nea.gov.cn/"
+    type: "national_agency"
+    priority: "high"
+    doc_classes: ["technical_standards", "grid_connection", "environmental_protection"]
+
+  - name: "国家工信部文件"
+    url: "https://www.miit.gov.cn/"
+    type: "national_agency"
+    priority: "medium"
+    doc_classes: ["technical_standards", "project_approval"]
+
+  - name: "国家生态环境部文件"
+    url: "https://www.mee.gov.cn/"
+    type: "national_agency"
+    priority: "medium"
+    doc_classes: ["environmental_protection", "regulations"]

@@ -96,63 +96,89 @@ class DiscoveryQuery(BaseModel):
     date_range: Optional[Dict[str, str]] = Field(None, description="Date range filter")
     domain_filter: List[str] = Field(default_factory=list, description="Allowed domains")
     max_results: int = Field(default=20, ge=1, le=100)
+    allow_national_fallback: bool = Field(default=False, description="Allow fallback to national sources")
     created_at: datetime = Field(default_factory=datetime.utcnow)
     
     def generate_search_query(self) -> str:
-        """Generate search query string for Perplexity."""
-        # Base query components
+        """
+        PR1: Compose a strict, province-scoped query.
+        Example:
+          (并网 验收 办事 指南 资料 清单) (site:gd.gov.cn OR site:gdee.gd.gov.cn OR site:gddrc.gd.gov.cn OR site:csg.cn) after:2023-01-01 before:2023-12-31
+        """
+        # Base query components - use Chinese keywords from query_normalize
         query_parts = []
-        
+
         # Province-specific terms
         province_terms = {
             Province.GUANGDONG: ["广东", "粤", "广东省"],
             Province.SHANDONG: ["山东", "鲁", "山东省"],
             Province.INNER_MONGOLIA: ["内蒙古", "蒙", "内蒙古自治区"],
-            Province.SICHUAN: ["四川", "川", "四川省"]
+            Province.SICHUAN: ["四川", "川", "四川省"],
+            Province.BEIJING: ["北京", "京", "北京市"],
+            Province.SHANGHAI: ["上海", "沪", "上海市"]
         }
-        
+
         if self.province in province_terms:
             query_parts.extend(province_terms[self.province])
-        
-        # Document class terms
+
+        # Document class terms - more comprehensive Chinese keywords
         doc_class_terms = {
-            DocumentClass.MARKET_RULES: ["市场规则", "交易规则", "市场管理办法"],
-            DocumentClass.GRID_CONNECTION: ["并网", "接入", "并网管理", "接入管理"],
-            DocumentClass.DISPATCH_OPS: ["调度", "运行", "调度管理", "运行管理"]
+            DocumentClass.MARKET_RULES: ["市场规则", "交易规则", "市场管理办法", "电价", "补贴"],
+            DocumentClass.GRID_CONNECTION: ["并网", "接入", "并网管理", "接入管理", "并网验收", "办事指南", "资料清单"],
+            DocumentClass.DISPATCH_OPS: ["调度", "运行", "调度管理", "运行管理", "调度规则"],
+            DocumentClass.TECHNICAL_STANDARDS: ["技术标准", "技术规范", "技术规定", "技术要求", "技术条件", "技术指标"]
         }
-        
+
         if self.doc_class in doc_class_terms:
             query_parts.extend(doc_class_terms[self.doc_class])
-        
+
         # Asset-specific terms
         if self.asset:
             asset_terms = {
-                AssetType.WIND: ["风电", "风力发电"],
-                AssetType.SOLAR: ["光伏", "太阳能", "分布式光伏"],
-                AssetType.BESS: ["储能", "电池储能", "储能系统"],
-                AssetType.COAL_FLEX: ["煤电", "火电", "煤电灵活性"]
+                AssetType.WIND: ["风电", "风力发电", "陆上风电", "海上风电"],
+                AssetType.SOLAR: ["光伏", "太阳能", "分布式光伏", "集中式光伏", "光伏发电"],
+                AssetType.BESS: ["储能", "电池储能", "储能系统", "电化学储能"],
+                AssetType.COAL_FLEX: ["煤电", "火电", "煤电灵活性", "深度调峰"]
             }
-            
+
             if self.asset in asset_terms:
                 query_parts.extend(asset_terms[self.asset])
-        
+
         # Add custom keywords
         query_parts.extend(self.keywords)
-        
+
         # Common regulatory terms
-        query_parts.extend(["规定", "办法", "通知", "公告"])
-        
-        # Combine query parts
-        search_query = " ".join(query_parts[:10])  # Limit to avoid too long queries
-        
+        query_parts.extend(["规定", "办法", "通知", "意见", "细则", "指南"])
+
+        # Create base query
+        base_query = " ".join(query_parts[:10])  # Limit to avoid too long queries
+
+        # PR1: Add province-specific site filters
+        domains = self.get_domain_allowlist()
+        if domains:
+            site_parts = []
+            for domain in domains:
+                if domain.startswith('.'):
+                    # Handle wildcard domains like .gov.cn
+                    site_parts.append(f"site:*{domain}")
+                else:
+                    site_parts.append(f"site:{domain}")
+
+            site_filter = " OR ".join(site_parts)
+            base_query = f"({base_query}) ({site_filter})"
+
         # Add date range if specified
         if self.date_range:
             if "start_date" in self.date_range:
-                search_query += f" after:{self.date_range['start_date']}"
+                base_query += f" after:{self.date_range['start_date']}"
             if "end_date" in self.date_range:
-                search_query += f" before:{self.date_range['end_date']}"
-        
-        return search_query
+                base_query += f" before:{self.date_range['end_date']}"
+
+        # PR1: Opt-out of national drift by default
+        if not self.allow_national_fallback:
+            base_query += " -site:scio.gov.cn -site:nea.gov.cn -site:gov.cn/news"
+
+        return base_query
     
     def get_domain_allowlist(self) -> List[str]:
         """Get domain allowlist for this query."""
@@ -166,7 +192,9 @@ class DiscoveryQuery(BaseModel):
             Province.GUANGDONG: ["gzpec.cn", "gdpec.com.cn", "csg.cn"],
             Province.SHANDONG: ["shandong-electric.com.cn", "sgcc.com.cn"],
             Province.INNER_MONGOLIA: ["nmgdl.cn", "nmg.sgcc.com.cn"],
-            Province.SICHUAN: ["sc.sgcc.com.cn", "scpec.com.cn"]
+            Province.SICHUAN: ["sc.sgcc.com.cn", "scpec.com.cn"],
+            Province.BEIJING: ["beijing.gov.cn", "bj.gov.cn", "bj.sgcc.com.cn"],
+            Province.SHANGHAI: ["shanghai.gov.cn", "sh.gov.cn", "sh.sgcc.com.cn"]
         }
         
         if self.province in province_domains:

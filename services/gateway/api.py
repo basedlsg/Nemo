@@ -5,8 +5,12 @@ import json
 from typing import List
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from services.online.query_online import router as online_router
+from dotenv import load_dotenv
+from services.online import query_online
 from services.gateway.feature_flags import is_feature_enabled
+
+# Load environment variables from .env file if present
+load_dotenv()  # <-- load .env if present (dev/local) so keys exist in this process
 
 # ---- logging ------------------------------------------------------------------
 def _get_json_log_handler() -> logging.Handler:
@@ -21,7 +25,8 @@ def _get_json_log_handler() -> logging.Handler:
                     "service": "gateway",
                     "filename": record.filename,
                     "lineno": record.lineno,
-                }
+                },
+                "build_tag": "current-stable"  # PR0: Lock in current behavior
             }
             # Add extra fields if they exist
             if hasattr(record, 'extra_context'):
@@ -92,6 +97,18 @@ def health_root():
 def health_v1():
     return {"ok": True}
 
+@app.get("/api/v1/debug")
+def debug_env():
+    """Debug endpoint to check environment variables."""
+    return {
+        "pplx_api_key_set": bool(os.getenv("PPLX_API_KEY")),
+        "google_api_key_set": bool(os.getenv("GOOGLE_API_KEY")),
+        "google_cse_id_set": bool(os.getenv("GOOGLE_CSE_ID")),
+        "allowlist_domains_set": bool(os.getenv("ALLOWLIST_DOMAINS")),
+        "allowlist_domains": os.getenv("ALLOWLIST_DOMAINS"),
+        "allow_count": len(set(filter(None, os.getenv("ALLOWLIST_DOMAINS","").lower().split(","))))
+    }
+
 @app.get("/")
 def root():
     return {
@@ -105,8 +122,7 @@ def root():
         "status": "running"
     }
 
-if is_feature_enabled("ONLINE_QUERY"):
-    app.include_router(online_router, prefix="/api/v1")
+app.include_router(query_online.router, prefix="/api/v1")
 
 @app.on_event("startup")
 async def on_startup():
@@ -122,6 +138,6 @@ async def on_startup():
         "google_cse_id_set": bool(os.getenv("GOOGLE_CSE_ID")),
         "allowlist_domains_set": bool(os.getenv("ALLOWLIST_DOMAINS")),
     }
-    logger.info("Application configuration", extra={'extra_context': config_details})
+    logger.info("Application configuration", extra={"extra_context": config_details})
     
-    logger.info("Routers mounted", extra={'extra_context': {"routers": ["/_health", "/api/v1/health", "/api/v1/query"]}})
+    logger.info("Routers mounted", extra={"extra_context": {"routers": ["/_health", "/api/v1/health", "/api/v1/query"]}})

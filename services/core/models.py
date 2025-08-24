@@ -17,12 +17,14 @@ class Province(str, Enum):
     GUANGDONG = "guangdong"
     INNER_MONGOLIA = "inner_mongolia"
     SICHUAN = "sichuan"  # Queued for future release
+    BEIJING = "beijing"  # Added for test queries
+    SHANGHAI = "shanghai"  # Added for test queries
     
     @classmethod
     def enabled_provinces(cls) -> List[str]:
         """Get list of currently enabled provinces."""
         # Sichuan is queued but not enabled in pilot
-        return [cls.SHANDONG, cls.GUANGDONG, cls.INNER_MONGOLIA]
+        return [cls.SHANDONG, cls.GUANGDONG, cls.INNER_MONGOLIA, cls.BEIJING, cls.SHANGHAI]
     
     @classmethod
     def is_enabled(cls, province: str) -> bool:
@@ -35,7 +37,9 @@ class Province(str, Enum):
             self.SHANDONG: "山东",
             self.GUANGDONG: "广东", 
             self.INNER_MONGOLIA: "内蒙古",
-            self.SICHUAN: "四川"
+            self.SICHUAN: "四川",
+            self.BEIJING: "北京",
+            self.SHANGHAI: "上海"
         }
         return names.get(self, self.value)
 
@@ -46,13 +50,15 @@ class DocumentClass(str, Enum):
     MARKET_RULES = "market_rules"
     GRID_CONNECTION = "grid_connection"
     DISPATCH_OPS = "dispatch_ops"
+    TECHNICAL_STANDARDS = "technical_standards"  # Added for test queries
     
     def display_name_zh(self) -> str:
         """Get Chinese display name for document class."""
         names = {
             self.MARKET_RULES: "市场规则",
             self.GRID_CONNECTION: "并网接入",
-            self.DISPATCH_OPS: "调度运行"
+            self.DISPATCH_OPS: "调度运行",
+            self.TECHNICAL_STANDARDS: "技术标准"
         }
         return names.get(self, self.value)
 
@@ -138,6 +144,8 @@ class QueryRequest(BaseModel):
     question: str = Field(..., min_length=1, max_length=1000)
     user_id: Optional[str] = None
     trace_id: Optional[str] = None
+    allow_national_fallback: bool = Field(default=False, description="Allow use of national sources if provincial search yields nothing")
+    year: Optional[int] = Field(default=None, ge=2000, le=2100, description="Specific year to search for regulations")
     
     @validator("question")
     def validate_question_content(cls, v):

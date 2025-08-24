@@ -15,6 +15,7 @@ from services.online.helpers import _sanitize_text_for_ui
 from services.core.query_normalize import expand_terms, get_hard_filters
 from services.core.retrieval import RetrievalSystem
 from services.core.metadata_extractor import extract_metadata
+from services.discovery.models import DiscoveryQuery
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -24,6 +25,17 @@ PPLX_API_KEY   = os.getenv("PPLX_API_KEY")
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 GOOGLE_CSE_ID  = os.getenv("GOOGLE_CSE_ID")
 ALLOW = set(filter(None, os.getenv("ALLOWLIST_DOMAINS","").lower().split(",")))
+logger.info("ALLOWLIST_DOMAINS loaded", extra={"allow_count": len(ALLOW)})
+
+# When allow_national_fallback=True, we allow these well-known national sources.
+# Keep tight and explicit to avoid drift.
+NATIONAL_ALLOW = {
+    "nea.gov.cn",          # National Energy Administration
+    "scio.gov.cn",         # State Council Information Office
+    "gov.cn",              # General govt portals (guardrail still checks wenhao/agency/year)
+    "ndrc.gov.cn",         # National Development and Reform Commission
+    "miit.gov.cn",         # Ministry of Industry and IT (sometimes hosts power standards)
+}
 
 # ---- optional OCR (use your in-repo client if available) --------------------
 HAS_OCR_CLIENT = False
@@ -35,6 +47,9 @@ class Query(BaseModel):
     asset: str | None = None
     question: str
     lang: str = Field(default="zh-CN")
+    allow_national_fallback: bool = False      # ← add
+    year: int | None = None                    # ← add
+
     @field_validator("lang")
     @classmethod
     def _lang_ok(cls, v):
@@ -43,6 +58,12 @@ class Query(BaseModel):
         return v
 
 # ---- helpers ----------------------------------------------------------------
+
+def _effective_allowlist(q: Query) -> set:
+    """
+    When allow_national_fallback is True, union the provincial allowlist with vetted national domains.
+    """
+    return ALLOW | (NATIONAL_ALLOW if getattr(q, "allow_national_fallback", False) else set())
 
 # ---- Perplexity (simple URL discovery) --------------------------------------
 def _generate_perplexity_queries(payload: Query, num_queries: int = 3) -> List[str]:
@@ -135,6 +156,7 @@ def perplexity_urls(query: str, max_urls: int = 10, num_queries: int = 3) -> Lis
     Performs multiple Perplexity searches with generated queries and aggregates the results.
     """
     if not PPLX_API_KEY:
+        logger.warning("Perplexity disabled: missing PPLX_API_KEY")
         return []
 
     all_urls = []
@@ -230,19 +252,26 @@ def _enhanced_perplexity_search(payload: Query, max_urls: int = 15) -> List[str]
 # ---- Google CSE verification -------------------------------------------------
 def cse_items(query: str, num: int = 10) -> List[Dict[str,Any]]:
     if not GOOGLE_API_KEY or not GOOGLE_CSE_ID:
-        raise RuntimeError("GOOGLE_API_KEY/GOOGLE_CSE_ID not set")
+        logger.warning("CSE disabled: missing GOOGLE_API_KEY or GOOGLE_CSE_ID")
+        return []
     params = {
         "key": GOOGLE_API_KEY,
         "cx": GOOGLE_CSE_ID,
-        "q": query,
+        "q": query,                 # includes site: filters from DiscoveryQuery
         "num": min(10, num),
         "lr": "lang_zh",
         "safe": "off",
         "fields": "items(title,link,snippet)"
     }
-    r = requests.get("https://www.googleapis.com/customsearch/v1", params=params, timeout=20)
-    r.raise_for_status()
-    return r.json().get("items",[]) or []
+    try:
+        r = requests.get("https://www.googleapis.com/customsearch/v1", params=params, timeout=20)
+        r.raise_for_status()
+        items = r.json().get("items", []) or []
+        logger.info("CSE items", extra={"count": len(items)})
+        return items
+    except Exception as e:
+        logger.error(f"CSE request failed: {e}")
+        return []
 
 def _enhanced_cse_search_strategy(query: str, province: str, asset: str = "光伏") -> List[Dict[str, Any]]:
     """
@@ -314,9 +343,12 @@ def _enhanced_cse_search_strategy(query: str, province: str, asset: str = "光�
     logger.info(f"Total unique CSE results: {len(unique_results)}")
     return unique_results
 
-def verify_or_search(perpl_urls: List[str], query: str) -> List[Dict[str,Any]]:
+def verify_or_search(perpl_urls: List[str], query: str, q: Query = None) -> List[Dict[str,Any]]:
+    # Use effective allowlist based on fallback setting
+    eff_allowlist = _effective_allowlist(q) if q else ALLOW
+    
     # 1) Prefer Perplexity URLs that pass allowlist
-    prefer = [{"title":"", "link":u, "snippet":""} for u in perpl_urls if _allowed(u, ALLOW)]
+    prefer = [{"title":"", "link":u, "snippet":""} for u in perpl_urls if _allowed(u, eff_allowlist)]
     # 2) Augment with Google CSE results and filter by allowlist
     items = cse_items(query, num=10)
     hits = []
@@ -324,18 +356,23 @@ def verify_or_search(perpl_urls: List[str], query: str) -> List[Dict[str,Any]]:
     for it in prefer + items:
         link = it.get("link","")
         if not link: continue
-        if not _allowed(link, ALLOW): continue
+        if not _allowed(link, eff_allowlist): 
+            logger.debug("Filtered out (domain not allowed)", extra={"url": link, "domain": _domain(link)})
+            continue
         if link in seen: continue
         seen.add(link)
         hits.append({"title": it.get("title",""), "url": link, "snippet": it.get("snippet","")})
     return hits
 
-def _enhanced_verify_or_search(perpl_urls: List[str], query: str, province: str, asset: str = "光伏") -> List[Dict[str,Any]]:
+def _enhanced_verify_or_search(perpl_urls: List[str], query: str, province: str, asset: str = "光伏", q: Query = None) -> List[Dict[str,Any]]:
     """
     Enhanced verification and search with multiple strategies
     """
+    # Use effective allowlist based on fallback setting
+    eff_allowlist = _effective_allowlist(q) if q else ALLOW
+    
     # 1) Prefer Perplexity URLs that pass allowlist
-    prefer = [{"title":"", "link":u, "snippet":""} for u in perpl_urls if _allowed(u, ALLOW)]
+    prefer = [{"title":"", "link":u, "snippet":""} for u in perpl_urls if _allowed(u, eff_allowlist)]
     logger.info(f"Perplexity URLs passing allowlist: {len(prefer)}")
     
     # 2) Enhanced Google CSE search with multiple strategies
@@ -362,7 +399,9 @@ def _enhanced_verify_or_search(perpl_urls: List[str], query: str, province: str,
     for it in cse_items:
         link = it.get("link","")
         if not link: continue
-        if not _allowed(link, ALLOW): continue
+        if not _allowed(link, eff_allowlist): 
+            logger.debug("Filtered out (domain not allowed)", extra={"url": link, "domain": _domain(link)})
+            continue
         if link in seen: continue
         seen.add(link)
         hits.append({"title": it.get("title",""), "url": link, "snippet": it.get("snippet","")})
@@ -390,21 +429,21 @@ def _classify_query_intent(question: str) -> str:
 
 def _build_enhanced_query_text(payload: Query) -> str:
     """
-    Builds an enhanced query text by adding intent-specific keywords.
+    Bridge to the stricter composer that adds province site filters and year window.
+    Keeps behavior minimal while actually scoping the search.
     """
-    terms = [payload.province, payload.doc_class, payload.asset or "", payload.question]
-    intent = _classify_query_intent(payload.question)
-
-    # Add intent-specific keywords based on the classified intent
-    if intent == "regulatory":
-        hint = " regulations guidelines rules official documents"
-    elif intent == "logistical":
-        hint = " transport management procedures"
-    else: # general, procedural, definitional, explanatory
-        hint = " official documents notice guidelines procedures connection grid"
-
-    full_query = " ".join([t for t in terms if t]).strip() + hint
-    return full_query
+    dq = DiscoveryQuery(
+        province=payload.province,
+        doc_class=payload.doc_class,
+        asset=payload.asset,
+        keywords=[payload.question],
+        allow_national_fallback=bool(getattr(payload, "allow_national_fallback", False)),
+        date_range=(
+            {"start_date": f"{payload.year}-01-01", "end_date": f"{payload.year}-12-31"}
+            if getattr(payload, "year", None) else None
+        ),
+    )
+    return dq.generate_search_query()
 
 # ---- scoring (quick & dirty, in-memory) -------------------------------------
 def enhanced_score(doc_text: str, q: Query) -> float:
@@ -512,13 +551,27 @@ async def query_online(q: Query) -> Dict[str, Any]:
     """
     Query online sources for Chinese energy compliance documents using improved retrieval system.
     """
-    logger.info(f"Received query: {q.dict()}")
+    start_time = time.time()
+
+    # PR5: Enhanced logging with observability metrics
+    query_details = {
+        "province": q.province,
+        "doc_class": q.doc_class,
+        "asset": q.asset,
+        "question": q.question[:100] + "..." if len(q.question) > 100 else q.question,
+        "lang": q.lang,
+        "allow_national_fallback": getattr(q, 'allow_national_fallback', False),
+        "year": getattr(q, 'year', None)
+    }
+    logger.info("Query received", extra={"query_details": query_details})
 
     # Step 1: Query normalization and expansion
     expanded_terms = expand_terms(q)
     hard_filters = get_hard_filters(q)
-    logger.info(f"Expanded terms: {expanded_terms}")
-    logger.info(f"Applied filters: {hard_filters}")
+    logger.info("Query processing started", extra={
+        "expanded_terms": expanded_terms,
+        "hard_filters": hard_filters
+    })
 
     # Step 2: Initialize retrieval system (placeholder - needs DB connection)
     # retrieval_system = RetrievalSystem(db_connection)
@@ -526,57 +579,40 @@ async def query_online(q: Query) -> Dict[str, Any]:
 
     # For now, fall back to enhanced search strategy
     full_query = _build_enhanced_query_text(q)
-    logger.info(f"Enhanced query: {full_query}")
+    logger.info("Enhanced query", extra={"query": full_query})
 
-    # Strategy 1: Enhanced Perplexity Search with source registry preference
-    logger.info("Getting URLs from Enhanced Perplexity with source registry...")
-    try:
-        perpl = _enhanced_perplexity_search_with_sources(q, max_urls=15, expanded_terms=expanded_terms)
-        logger.info(f"Enhanced Perplexity with sources returned {len(perpl)} URLs.")
-    except Exception as e:
-        logger.error(f"Enhanced Perplexity failed: {e}")
-        perpl = []
+    # Strategy 1: Google CSE as primary
+    cse = cse_items(full_query, num=10)
+    cse_urls = [it["link"] for it in cse if "link" in it]
+    logger.info("CSE urls", extra={"count": len(cse_urls), "sample": cse_urls[:3]})
 
-    # Strategy 2: Enhanced Google CSE Search with filters
-    logger.info("Verifying URLs with Enhanced Google CSE and metadata extraction...")
-    try:
-        candidates = _enhanced_verify_with_metadata(perpl, full_query, q.province, q.asset, expanded_terms)
-        logger.info(f"Found {len(candidates)} candidates after enhanced CSE verification with metadata.")
-    except Exception as e:
-        logger.error(f"Enhanced CSE verification failed: {e}")
-        candidates = []
+    # Strategy 2: Perplexity augment (optional)
+    perpl_urls = perplexity_urls(full_query, max_urls=8, num_queries=2)
+    logger.info("Perplexity urls", extra={"count": len(perpl_urls), "sample": perpl_urls[:3]})
 
-    # Strategy 3: Fallback to original methods if enhanced methods fail
-    if len(candidates) < 3:
-        logger.info("Enhanced methods returned insufficient results, trying fallback...")
-        try:
-            # Fallback to original Perplexity
-            fallback_perpl = perplexity_urls(full_query, max_urls=10, num_queries=3)
-            logger.info(f"Fallback Perplexity returned {len(fallback_perpl)} URLs.")
+    all_urls = list(dict.fromkeys(cse_urls + perpl_urls))
+    logger.info("Aggregated urls", extra={"count": len(all_urls), "sample": all_urls[:3]})
 
-            # Fallback to original CSE
-            fallback_candidates = verify_or_search(fallback_perpl, full_query)
-            logger.info(f"Fallback CSE found {len(fallback_candidates)} candidates.")
-
-            # Combine results
-            all_candidates = candidates + fallback_candidates
-            # Remove duplicates
-            seen_urls = set()
-            unique_candidates = []
-            for candidate in all_candidates:
-                url = candidate.get("url", "")
-                if url not in seen_urls:
-                    seen_urls.add(url)
-                    unique_candidates.append(candidate)
-            candidates = unique_candidates
-            logger.info(f"Combined fallback results: {len(candidates)} candidates.")
-        except Exception as e:
-            logger.error(f"Fallback methods also failed: {e}")
+    candidates = verify_or_search(all_urls, full_query, q)  # reuse existing verification
+    logger.info("Verified candidates", extra={"count": len(candidates)})
 
     if not candidates:
-        logger.warning("No first-party citations found.")
+        logger.warning("No first-party citations found", extra={"refusal_reason": "no_first_party_citation"})
         # Enhanced refusal with diagnostics
-        return _build_refusal_response(q, expanded_terms, hard_filters, "no_first_party_citation")
+        refusal_response = _build_refusal_response(q, expanded_terms, hard_filters, "no_first_party_citation")
+
+        # PR5: Add final observability logging
+        processing_time_ms = int((time.time() - start_time) * 1000)
+        logger.info("Query completed with refusal", extra={
+            "query_details": query_details,
+            "metrics": metrics,
+            "processing_time_ms": processing_time_ms,
+            "status_code": 422,
+            "refusal_reason": "no_first_party_citation",
+            "top_candidates": []
+        })
+
+        return refusal_response
 
     # Enhanced document processing with metadata extraction and improved scoring
     logger.info("Processing documents with metadata extraction and improved scoring...")
@@ -653,11 +689,53 @@ async def query_online(q: Query) -> Dict[str, Any]:
     # Join bullets into a single answer_zh string
     answer_zh = "\n".join(bullets)
 
-    # Calculate processing time (approximate)
-    processing_time_ms = 2000  # Updated for enhanced processing
+    # Calculate actual processing time
+    processing_time_ms = int((time.time() - start_time) * 1000)
 
     # Generate trace ID
     trace_id = f"improved_{int(time.time())}_{hash(full_query) % 10000}"
+
+    # PR5: Calculate provincial hit rate
+    provincial_domains = [
+        "gd.gov.cn", "gdee.gd.gov.cn", "gddrc.gd.gov.cn", "csg.cn",  # Guangdong
+        "sd.gov.cn", "shandong-electric.com.cn", "sgcc.com.cn",    # Shandong
+        "bj.gov.cn", "beijing.gov.cn",                             # Beijing
+        "sh.gov.cn", "shanghai.gov.cn",                            # Shanghai
+    ]
+
+    provincial_hits = 0
+    top_candidates = []
+
+    for i, result in enumerate(processed[:5]):
+        url = result.get("url", "")
+        domain = _domain(url) if url else ""
+
+        # Check if this is a provincial hit
+        is_provincial = any(prov_domain in domain for prov_domain in provincial_domains)
+
+        if is_provincial:
+            provincial_hits += 1
+
+        top_candidates.append({
+            "rank": i + 1,
+            "url": url,
+            "domain": domain,
+            "score": round(result.get("score", 0), 3),
+            "is_provincial": is_provincial
+        })
+
+    metrics["provincial_hit_rate"] = provincial_hits / len(top_candidates) if top_candidates else 0.0
+    metrics["total_candidates_processed"] = len(processed)
+
+    # PR5: Enhanced final observability logging
+    logger.info("Query completed successfully", extra={
+        "query_details": query_details,
+        "metrics": metrics,
+        "processing_time_ms": processing_time_ms,
+        "status_code": 200,
+        "top_candidates": top_candidates,
+        "final_citations": len(citations)
+    })
 
     return {
         "answer_zh": answer_zh,
@@ -671,7 +749,9 @@ async def query_online(q: Query) -> Dict[str, Any]:
             "filters_applied": hard_filters,
             "total_candidates": len(processed),
             "quality_threshold": 3.0,
-            "search_strategy": "improved_retrieval_with_metadata"
+            "search_strategy": "improved_retrieval_with_metadata",
+            "provincial_hit_rate": metrics["provincial_hit_rate"],
+            "national_fallback_used": metrics["national_fallback_used"]
         }
     }
 

@@ -2,6 +2,7 @@
 import logging
 from typing import Dict, Any, List, Optional
 from datetime import datetime
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Query, Depends, Response
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -20,10 +21,32 @@ from services.radar.market_signals import (
 
 logger = logging.getLogger(__name__)
 
+
+# ---- lifespan ------------------------------------------------------------------
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup logic
+    logger.info("Radar Service starting up...")
+
+    try:
+        # Initialize market signals service
+        service = await get_market_signals_service()
+        logger.info("Market signals service initialized successfully")
+
+    except Exception as e:
+        logger.error(f"Failed to initialize market signals service: {e}")
+
+    yield
+
+    # Shutdown logic
+    logger.info("Radar Service shutting down...")
+
+
 app = FastAPI(
     title="Radar Service",
     description="Market signals dashboard for energy regulatory radar",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan,
 )
 
 
@@ -289,24 +312,7 @@ async def health_check():
         )
 
 
-@app.on_event("startup")
-async def startup_event():
-    """Initialize service on startup."""
-    logger.info("Radar Service starting up...")
-    
-    try:
-        # Initialize market signals service
-        service = await get_market_signals_service()
-        logger.info("Market signals service initialized successfully")
-        
-    except Exception as e:
-        logger.error(f"Failed to initialize market signals service: {e}")
 
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Cleanup on shutdown."""
-    logger.info("Radar Service shutting down...")
 
 
 if __name__ == "__main__":

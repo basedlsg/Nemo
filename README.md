@@ -79,6 +79,16 @@ A sophisticated AI-powered assistant for Chinese energy compliance and regulator
    pip install -r requirements.txt
    ```
 
+   **Note**: This project requires Python 3.11+ and the following key dependencies have been added:
+   - `pyppeteer>=1.0.2` - For PDF generation in citation packs
+   - `vertexai>=0.0.1` - For Google Cloud Vertex AI embeddings
+   - `google-cloud-aiplatform>=1.36.4` - For Vertex AI integration
+
+   If you encounter dependency conflicts, you may need to upgrade pydantic:
+   ```bash
+   pip install --upgrade pydantic
+   ```
+
 4. **Set up environment variables**
    ```bash
    cp .env.example .env
@@ -181,6 +191,14 @@ Pre-configured canonical government portals for each province:
 
 ## 🧪 Testing
 
+### Recent Fixes Applied
+✅ **Dependencies Added**: pyppeteer, vertexai, google-cloud-aiplatform
+✅ **Core Models Implemented**: QueryContext, ProcessingMetrics
+✅ **Error Handling Enhanced**: ErrorFormatter, RefusalHTTPException
+✅ **Syntax Errors Fixed**: test_verification.py class definition
+✅ **Pydantic Modernized**: Updated to v2 validators
+✅ **FastAPI Modernized**: Replaced @app.on_event with lifespan managers
+
 ### Six Comprehensive Test Queries
 
 1. **Guangdong 2023 Distributed PV Cap**
@@ -218,11 +236,20 @@ Pre-configured canonical government portals for each province:
 # Run all six test queries
 python test_six_queries.py
 
+# Run unit tests
+pytest tests/unit/
+
 # Run with custom timeout (seconds)
 python -c "
 import requests
 # Custom test logic here
 "
+```
+
+**Note**: If you encounter import errors related to pydantic or dependencies, try:
+```bash
+pip install --upgrade pydantic
+pip install --upgrade pydantic-core
 ```
 
 ## 📁 Project Structure

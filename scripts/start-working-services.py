@@ -61,12 +61,7 @@ def start_service(service):
         "--log-level", "info"
     ]
     
-    # Use DETACHED_PROCESS creation flag on Windows to run services in the background
-    creationflags = 0
-    if sys.platform == "win32":
-        creationflags = subprocess.DETACHED_PROCESS
-        
-    return subprocess.Popen(cmd, creationflags=creationflags, close_fds=True)
+    return subprocess.Popen(cmd)
 
 def main():
     print("🌟 Starting Geo-Adaptive Energy Assistant (Working Services)")

@@ -6,7 +6,7 @@ from enum import Enum
 from typing import List, Optional, Dict, Any, Union
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, Field, validator, root_validator, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from typing import Literal
 
 
@@ -113,14 +113,16 @@ class CitationMetadata(BaseModel):
     doc_class: DocumentClass
     asset: Optional[AssetType] = None
     
-    @validator("checksum")
+        @field_validator("checksum")
+    @classmethod
     def validate_checksum_format(cls, v):
         """Validate SHA256 checksum format."""
         if not all(c in "0123456789abcdef" for c in v.lower()):
             raise ValueError("Checksum must be valid SHA256 hex string")
         return v.lower()
-    
-    @validator("effective_date")
+
+    @field_validator("effective_date")
+    @classmethod
     def validate_effective_date_not_future(cls, v):
         """Ensure effective date is not in the future."""
         if v > date.today():
@@ -152,15 +154,14 @@ class QueryRequest(BaseModel):
         """Basic validation for question content."""
         # Remove excessive whitespace
         v = " ".join(v.split())
-        
+
         # Check for minimum meaningful content
         if len(v.strip()) < 3:
             raise ValueError("Question must contain meaningful content")
-        
+
         return v
     
-    @model_validator(mode='before')
-    @classmethod
+    @root_validator(pre=True)
     def validate_province_enabled(cls, values):
         """Ensure province is currently enabled."""
         if isinstance(values, dict):
@@ -195,7 +196,7 @@ class QueryResponse(BaseModel):
         if not has_chinese:
             raise ValueError("Answer must contain Chinese content")
         return v
-    
+
     @validator("citations")
     def validate_citations_not_empty(cls, v):
         """Ensure at least one citation is provided."""
@@ -220,12 +221,14 @@ class RefusalResponse(BaseModel):
     ingestion_request_id: Optional[UUID] = None
     generated_at: datetime = Field(default_factory=datetime.utcnow)
     
-    @model_validator(mode='after')
-    def set_chinese_message(self):
+    @root_validator
+    def set_chinese_message(cls, values):
         """Set Chinese message based on refusal reason."""
-        if self.reason and not self.message_zh:
-            self.message_zh = self.reason.message_zh()
-        return self
+        reason = values.get('reason')
+        message_zh = values.get('message_zh')
+        if reason and not message_zh:
+            values['message_zh'] = reason.message_zh()
+        return values
     
     class Config:
         use_enum_values = True
@@ -256,15 +259,17 @@ class CompliancePack(BaseModel):
         if v not in valid_statuses:
             raise ValueError(f"Pack status must be one of: {valid_statuses}")
         return v
-    
-    @model_validator(mode='after')
-    def set_expiration(self):
+
+    @root_validator
+    def set_expiration(cls, values):
         """Set default expiration time if not provided."""
-        if not self.expires_at and self.generated_at:
+        expires_at = values.get('expires_at')
+        generated_at = values.get('generated_at')
+        if not expires_at and generated_at:
             # Default expiration: 7 days from generation
             from datetime import timedelta
-            self.expires_at = self.generated_at + timedelta(days=7)
-        return self
+            values['expires_at'] = generated_at + timedelta(days=7)
+        return values
     
     def is_expired(self) -> bool:
         """Check if pack has expired."""
@@ -395,7 +400,7 @@ class SourceRegistry(BaseModel):
         """Validate ISO8601 interval format for cadence."""
         if v is None:
             return v
-        
+
         # Basic validation for ISO8601 intervals (P[n]Y[n]M[n]DT[n]H[n]M[n]S or R/start/duration)
         import re
         iso8601_pattern = r"^(R\/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z\/)?P(\d+Y)?(\d+M)?(\d+D)?(T(\d+H)?(\d+M)?(\d+S)?)?$"
@@ -407,11 +412,182 @@ class SourceRegistry(BaseModel):
         """Check if source hasn't been crawled recently."""
         if not self.last_crawled_at:
             return True
-        
+
         from datetime import timedelta
         threshold = datetime.utcnow() - timedelta(hours=hours_threshold)
         return self.last_crawled_at < threshold
-    
+
+    class Config:
+        use_enum_values = True
+        json_encoders = {
+            datetime: lambda v: v.isoformat()
+        }
+
+
+class QueryContext(BaseModel):
+    """Context information for query processing and tracking."""
+
+    trace_id: str = Field(..., description="Unique identifier for request tracing")
+    province: Province = Field(..., description="Target province for the query")
+    asset: AssetType = Field(..., description="Energy asset type being queried")
+    doc_class: DocumentClass = Field(..., description="Document classification")
+    question: str = Field(..., description="Original user question")
+    user_id: Optional[str] = Field(None, description="User identifier if authenticated")
+    timestamp: datetime = Field(default_factory=datetime.utcnow, description="Query timestamp")
+    client_ip: Optional[str] = Field(None, description="Client IP address")
+    user_agent: Optional[str] = Field(None, description="Client user agent")
+
+    @validator("trace_id")
+    def validate_trace_id(cls, v):
+        """Validate trace ID format."""
+        if not v or len(v.strip()) == 0:
+            raise ValueError("Trace ID cannot be empty")
+        return v.strip()
+
+    @validator("question")
+    def validate_question(cls, v):
+        """Validate question content."""
+        if not v or len(v.strip()) < 3:
+            raise ValueError("Question must be at least 3 characters long")
+        return v.strip()
+
+    def get_cache_key(self) -> str:
+        """Generate cache key for this query context."""
+        content = f"{self.province.value}:{self.asset.value}:{self.doc_class.value}:{self.question.lower().strip()}"
+        return hashlib.sha256(content.encode('utf-8')).hexdigest()[:16]
+
+    def get_request_metadata(self) -> Dict[str, Any]:
+        """Get metadata for request processing."""
+        return {
+            "trace_id": self.trace_id,
+            "province": self.province.value,
+            "asset": self.asset.value,
+            "doc_class": self.doc_class.value,
+            "timestamp": self.timestamp.isoformat(),
+            "user_id": self.user_id,
+            "client_ip": self.client_ip,
+            "user_agent": self.user_agent
+        }
+
+    class Config:
+        use_enum_values = True
+        json_encoders = {
+            datetime: lambda v: v.isoformat()
+        }
+
+
+class ProcessingMetrics(BaseModel):
+    """Metrics tracking for query processing pipeline."""
+
+    # Timing metrics (in milliseconds)
+    start_time: float = Field(..., description="Pipeline start timestamp")
+    total_time_ms: Optional[float] = Field(None, description="Total processing time")
+    retrieval_time_ms: Optional[float] = Field(None, description="Retrieval phase time")
+    guardrails_time_ms: Optional[float] = Field(None, description="Guardrails validation time")
+    enrichment_time_ms: Optional[float] = Field(None, description="Citation enrichment time")
+    composition_time_ms: Optional[float] = Field(None, description="Answer composition time")
+
+    # Count metrics
+    total_candidates: Optional[int] = Field(None, description="Total candidates found")
+    retrieved_candidates: Optional[int] = Field(None, description="Candidates retrieved")
+    validated_candidates: Optional[int] = Field(None, description="Candidates passing validation")
+    enriched_candidates: Optional[int] = Field(None, description="Candidates successfully enriched")
+
+    # Quality metrics
+    avg_relevance_score: Optional[float] = Field(None, ge=0.0, le=1.0, description="Average relevance score")
+    min_relevance_score: Optional[float] = Field(None, ge=0.0, le=1.0, description="Minimum relevance score")
+    max_relevance_score: Optional[float] = Field(None, ge=0.0, le=1.0, description="Maximum relevance score")
+
+    # Pipeline status
+    trace_id: str = Field(..., description="Associated trace ID")
+    pipeline_stage: str = Field(default="initialized", description="Current pipeline stage")
+    error_stage: Optional[str] = Field(None, description="Stage where error occurred")
+    error_message: Optional[str] = Field(None, description="Error message if failed")
+
+    @validator("start_time")
+    def validate_start_time(cls, v):
+        """Validate start time is reasonable."""
+        import time
+        current_time = time.time()
+        if v > current_time + 60:  # Future time more than 1 minute ahead
+            raise ValueError("Start time cannot be significantly in the future")
+        if v < current_time - 3600:  # More than 1 hour ago
+            raise ValueError("Start time cannot be more than 1 hour ago")
+        return v
+
+    @root_validator
+    def validate_timing_consistency(cls, values):
+        """Ensure timing metrics are consistent."""
+        total_time_ms = values.get('total_time_ms')
+        if total_time_ms is not None:
+            phase_times = [
+                values.get('retrieval_time_ms') or 0,
+                values.get('guardrails_time_ms') or 0,
+                values.get('enrichment_time_ms') or 0,
+                values.get('composition_time_ms') or 0
+            ]
+            total_phase_time = sum(phase_times)
+
+            # Total should be at least the sum of phases
+            if total_time_ms < total_phase_time * 0.9:  # Allow 10% tolerance
+                raise ValueError("Total time should be at least the sum of phase times")
+
+        return values
+
+    def mark_stage_complete(self, stage: str, time_taken_ms: float):
+        """Mark a pipeline stage as complete and record timing."""
+        setattr(self, f"{stage}_time_ms", time_taken_ms)
+        self.pipeline_stage = f"{stage}_complete"
+
+    def mark_error(self, stage: str, error_message: str):
+        """Mark an error in the pipeline."""
+        self.error_stage = stage
+        self.error_message = error_message
+        self.pipeline_stage = f"{stage}_error"
+
+    def finalize(self):
+        """Finalize metrics with total time calculation."""
+        import time
+        if self.total_time_ms is None:
+            self.total_time_ms = (time.time() - self.start_time) * 1000
+
+    def get_summary(self) -> Dict[str, Any]:
+        """Get a summary of key metrics."""
+        return {
+            "trace_id": self.trace_id,
+            "total_time_ms": self.total_time_ms,
+            "pipeline_stage": self.pipeline_stage,
+            "candidates_found": self.total_candidates,
+            "candidates_validated": self.validated_candidates,
+            "avg_relevance": self.avg_relevance_score,
+            "error_stage": self.error_stage,
+            "error_message": self.error_message
+        }
+
+    def get_performance_breakdown(self) -> Dict[str, Any]:
+        """Get detailed performance breakdown."""
+        return {
+            "trace_id": self.trace_id,
+            "total_time_ms": self.total_time_ms,
+            "phase_breakdown": {
+                "retrieval": self.retrieval_time_ms,
+                "guardrails": self.guardrails_time_ms,
+                "enrichment": self.enrichment_time_ms,
+                "composition": self.composition_time_ms
+            },
+            "candidate_flow": {
+                "total": self.total_candidates,
+                "retrieved": self.retrieved_candidates,
+                "validated": self.validated_candidates,
+                "enriched": self.enriched_candidates
+            },
+            "quality_metrics": {
+                "avg_relevance": self.avg_relevance_score,
+                "min_relevance": self.min_relevance_score,
+                "max_relevance": self.max_relevance_score
+            }
+        }
+
     class Config:
         use_enum_values = True
         json_encoders = {

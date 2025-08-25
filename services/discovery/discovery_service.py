@@ -30,7 +30,9 @@ class DiscoveryRequest:
         asset: Optional[AssetType] = None,
         keywords: Optional[List[str]] = None,
         max_results: int = 20,
-        date_range: Optional[Dict[str, str]] = None
+        date_range: Optional[Dict[str, str]] = None,
+        allow_national_fallback: bool = False,
+        year: Optional[int] = None
     ):
         self.province = province
         self.doc_class = doc_class
@@ -38,6 +40,8 @@ class DiscoveryRequest:
         self.keywords = keywords or []
         self.max_results = max_results
         self.date_range = date_range
+        self.allow_national_fallback = allow_national_fallback
+        self.year = year
         self.request_id = uuid4()
         self.created_at = datetime.utcnow()
 
@@ -86,6 +90,14 @@ class DiscoveryService:
         try:
             logger.info(f"Starting document discovery for {request.province.value} {request.doc_class.value}")
             
+            # PR1: Handle year parameter for date range
+            date_range = request.date_range
+            if request.year and not date_range:
+                date_range = {
+                    "start_date": f"{request.year}-01-01",
+                    "end_date": f"{request.year}-12-31"
+                }
+
             # Create discovery query
             query = DiscoveryQuery(
                 query_id=request.request_id,
@@ -93,8 +105,9 @@ class DiscoveryService:
                 doc_class=request.doc_class,
                 asset=request.asset,
                 keywords=request.keywords,
-                date_range=request.date_range,
-                max_results=request.max_results
+                date_range=date_range,
+                max_results=request.max_results,
+                allow_national_fallback=request.allow_national_fallback
             )
             
             # Get domain allowlist from registry

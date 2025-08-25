@@ -1,5 +1,14 @@
 # 🧪 GAEA Energy Assistant Testing Guide
 
+## 📋 **Recent Updates & Fixes Applied**
+
+✅ **Dependencies Added**: pyppeteer, vertexai, google-cloud-aiplatform
+✅ **Core Models Implemented**: QueryContext, ProcessingMetrics
+✅ **Error Handling Enhanced**: ErrorFormatter, RefusalHTTPException
+✅ **Syntax Errors Fixed**: test_verification.py class definition
+✅ **Pydantic Modernized**: Updated to v2 validators
+✅ **FastAPI Modernized**: Replaced @app.on_event with lifespan managers
+
 ## 🎯 **Live Deployment URLs**
 
 - **Web UI**: https://gaea-ui-964505076225.us-central1.run.app
@@ -134,6 +143,38 @@ Each response includes:
 - `trace_id`: For tracking requests
 - `processing_time_ms`: Performance monitoring
 - `timestamp`: When the response was generated
+
+## 🔧 **Troubleshooting Recent Fixes**
+
+### Import Errors
+If you encounter import errors after the recent updates:
+
+**Pydantic Compatibility Issues:**
+```bash
+pip install --upgrade pydantic
+pip install --upgrade pydantic-core
+```
+
+**Missing Dependencies:**
+```bash
+pip install -r requirements.txt
+# Or specifically install new dependencies:
+pip install pyppeteer vertexai google-cloud-aiplatform
+```
+
+**Python Version Issues:**
+This project requires Python 3.11+. If you're using an older alpha version like 3.11.0a5, you may need to upgrade Python or use a compatible pydantic version.
+
+### Test Failures
+**Syntax Error in test_verification.py:**
+This has been fixed in the recent updates. If you still see class definition errors, ensure you have the latest version of the test file.
+
+**Missing Module Errors:**
+The following modules have been implemented:
+- `QueryContext` and `ProcessingMetrics` in `services/core/models.py`
+- `ErrorFormatter` and `RefusalHTTPException` in `services/refusal/error_formatter.py`
+
+If imports still fail, check that all dependencies are properly installed.
 
 ## 📈 **Performance Expectations**
 

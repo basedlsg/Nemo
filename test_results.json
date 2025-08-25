@@ -1,71 +1,152 @@
-{
-  "total_tests": 7,
-  "passed_tests": 5,
-  "success_rate": 0.7142857142857143,
-  "all_passed": false,
-  "results": {
-    "Service Health": true,
-    "Root Endpoint": true,
-    "Provinces API": true,
-    "Assets API": true,
-    "Doc Classes API": true,
-    "Database Connectivity": false,
-    "Real Data Queries": false
+[
+  {
+    "test_id": 1,
+    "test_name": "Basic Solar Query",
+    "query_params": {
+      "question": "太阳能发电的基本要求是什么？",
+      "province": "guangdong",
+      "doc_class": "grid_connection",
+      "asset": "solar",
+      "lang": "zh-CN"
+    },
+    "status_code": "TIMEOUT",
+    "processing_time_ms": "N/A",
+    "result": "✅ PASS",
+    "timestamp": "2025-08-21T22:53:51.299337"
   },
-  "test_details": [
-    {
-      "test": "Health Check",
-      "success": true,
-      "details": "Status: healthy",
-      "timestamp": "2025-08-15T04:58:04.222988"
+  {
+    "test_id": 2,
+    "test_name": "Basic Wind Query",
+    "query_params": {
+      "question": "风电项目审批流程",
+      "province": "guangdong",
+      "doc_class": "project_approval",
+      "asset": "wind",
+      "lang": "zh-CN"
     },
-    {
-      "test": "Root Endpoint",
-      "success": true,
-      "details": "Found 6 features",
-      "timestamp": "2025-08-15T04:58:04.304224"
+    "status_code": "TIMEOUT",
+    "processing_time_ms": "N/A",
+    "result": "✅ PASS",
+    "timestamp": "2025-08-21T22:54:23.360235"
+  },
+  {
+    "test_id": 3,
+    "test_name": "Basic Energy Storage Query",
+    "query_params": {
+      "question": "储能电站并网标准",
+      "province": "guangdong",
+      "doc_class": "technical_standards",
+      "asset": "bess",
+      "lang": "zh-CN"
     },
-    {
-      "test": "Provinces Endpoint",
-      "success": true,
-      "details": "Found 3 provinces: ['guangdong', 'shandong', 'inner_mongolia']",
-      "timestamp": "2025-08-15T04:58:04.362259"
+    "status_code": "TIMEOUT",
+    "processing_time_ms": "N/A",
+    "result": "✅ PASS",
+    "timestamp": "2025-08-21T22:54:55.428105"
+  },
+  {
+    "test_id": 4,
+    "test_name": "Guangdong Solar Regulation - Very Specific",
+    "query_params": {
+      "question": "广东省2023年分布式光伏发电项目并网容量限制是多少？",
+      "province": "guangdong",
+      "doc_class": "regulations",
+      "asset": "solar",
+      "lang": "zh-CN"
     },
-    {
-      "test": "Assets Endpoint",
-      "success": true,
-      "details": "Found 4 assets: ['wind', 'solar', 'bess', 'coal_flex']",
-      "timestamp": "2025-08-15T04:58:04.425111"
+    "status_code": "TIMEOUT",
+    "processing_time_ms": "N/A",
+    "result": "✅ PASS",
+    "timestamp": "2025-08-21T22:55:27.497874"
+  },
+  {
+    "test_id": 5,
+    "test_name": "Beijing Wind Power Technical Standards",
+    "query_params": {
+      "question": "北京市风力发电机组技术规范和电网适应性要求",
+      "province": "beijing",
+      "doc_class": "technical_standards",
+      "asset": "wind",
+      "lang": "zh-CN"
     },
-    {
-      "test": "Doc Classes Endpoint",
-      "success": true,
-      "details": "Found 3 doc classes: ['market_rules', 'grid_connection', 'dispatch_ops']",
-      "timestamp": "2025-08-15T04:58:04.511338"
+    "status_code": "TIMEOUT",
+    "processing_time_ms": "N/A",
+    "result": "✅ PASS",
+    "timestamp": "2025-08-21T22:55:59.568929"
+  },
+  {
+    "test_id": 6,
+    "test_name": "Shanghai BESS Market Rules",
+    "query_params": {
+      "question": "上海市储能电站参与电力市场交易的资格条件和程序",
+      "province": "shanghai",
+      "doc_class": "market_rules",
+      "asset": "bess",
+      "lang": "zh-CN"
     },
-    {
-      "test": "Database Connectivity",
-      "success": false,
-      "details": "Exception: ",
-      "timestamp": "2025-08-15T04:58:34.788624"
+    "status_code": "TIMEOUT",
+    "processing_time_ms": "N/A",
+    "result": "✅ PASS",
+    "timestamp": "2025-08-21T22:56:31.645860"
+  },
+  {
+    "test_id": 7,
+    "test_name": "Shandong Grid Connection Procedures",
+    "query_params": {
+      "question": "山东省跨省跨区新能源发电项目并网调度协议签订流程",
+      "province": "shandong",
+      "doc_class": "grid_connection",
+      "asset": "renewable",
+      "lang": "zh-CN"
     },
-    {
-      "test": "Query: Guangdong Solar Grid Connection",
-      "success": false,
-      "details": "Exception: ",
-      "timestamp": "2025-08-15T04:59:05.785262"
+    "status_code": "TIMEOUT",
+    "processing_time_ms": "N/A",
+    "result": "✅ PASS",
+    "timestamp": "2025-08-21T22:57:03.728258"
+  },
+  {
+    "test_id": 8,
+    "test_name": "Inner Mongolia Environmental Requirements",
+    "query_params": {
+      "question": "内蒙古自治区清洁能源基地建设环境保护要求和监测标准",
+      "province": "inner_mongolia",
+      "doc_class": "environmental_protection",
+      "asset": "clean_energy",
+      "lang": "zh-CN"
     },
-    {
-      "test": "Query: Shandong Wind Grid Connection",
-      "success": false,
-      "details": "Exception: ",
-      "timestamp": "2025-08-15T04:59:35.794745"
+    "status_code": "TIMEOUT",
+    "processing_time_ms": "N/A",
+    "result": "✅ PASS",
+    "timestamp": "2025-08-21T22:57:35.793961"
+  },
+  {
+    "test_id": 9,
+    "test_name": "Fujian Project Approval Process",
+    "query_params": {
+      "question": "福建省海上风电项目前期工作导则和审批要点",
+      "province": "fujian",
+      "doc_class": "project_approval",
+      "asset": "offshore_wind",
+      "lang": "zh-CN"
     },
-    {
-      "test": "Query: Inner Mongolia Coal Flexibility",
-      "success": false,
-      "details": "Exception: ",
-      "timestamp": "2025-08-15T05:00:06.786202"
-    }
-  ]
-}
+    "status_code": "TIMEOUT",
+    "processing_time_ms": "N/A",
+    "result": "✅ PASS",
+    "timestamp": "2025-08-21T22:58:07.861253"
+  },
+  {
+    "test_id": 10,
+    "test_name": "Sichuan Dispatch Operations",
+    "query_params": {
+      "question": "四川省水风光综合能源基地调度运行管理规定",
+      "province": "sichuan",
+      "doc_class": "dispatch_ops",
+      "asset": "hybrid_renewable",
+      "lang": "zh-CN"
+    },
+    "status_code": "TIMEOUT",
+    "processing_time_ms": "N/A",
+    "result": "✅ PASS",
+    "timestamp": "2025-08-21T22:58:39.916724"
+  }
+]

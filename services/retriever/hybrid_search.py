@@ -8,6 +8,7 @@ from datetime import datetime
 
 from services.database import pool
 from services.embeddings.vertex_client import VertexAIEmbeddingClient
+from services.normalize.sectioner import rank_sections, score_text  # PR3: Section-level re-ranking
 
 logger = logging.getLogger(__name__)
 
@@ -65,19 +66,79 @@ class HybridSearchService:
                 question_embedding, question, province, doc_class, asset, limit
             )
             
+            # PR3: Add section-level re-ranking for better passage extraction
+            section_ranked_results = await self._section_level_rerank(results, question, limit)
+
             # Add passage slicing and metadata
-            enriched_results = await self._enrich_search_results(results)
-            
+            enriched_results = await self._enrich_search_results(section_ranked_results)
+
             processing_time_ms = int((time.time() - start_time) * 1000)
-            
+
             logger.info(f"Hybrid search completed: {len(enriched_results)} results in {processing_time_ms}ms")
-            
+
             return enriched_results
             
         except Exception as e:
             logger.error(f"Hybrid search failed: {e}")
             return []
-    
+
+    async def _section_level_rerank(
+        self,
+        results: List[Dict[str, Any]],
+        question: str,
+        limit: int
+    ) -> List[Dict[str, Any]]:
+        """
+        PR3: Perform section-level re-ranking on search results.
+
+        This improves passage extraction by finding the most relevant sections
+        within each document rather than using document-level relevance.
+        """
+        try:
+            reranked_results = []
+
+            for result in results:
+                doc_text = result.get("content", "")
+                if not doc_text:
+                    # Keep original result if no content
+                    reranked_results.append(result)
+                    continue
+
+                # Split document into sections and rank them
+                top_sections = rank_sections(question, doc_text, top_k=3)
+
+                if top_sections:
+                    # Use the best section as the passage
+                    best_section = top_sections[0]
+
+                    # Update the result with section-specific information
+                    section_result = result.copy()
+                    section_result["content"] = best_section["text"]
+                    section_result["section_id"] = best_section["section_id"]
+                    section_result["section_heading"] = best_section["heading"]
+                    section_result["section_score"] = score_text(question, best_section["text"])
+
+                    # Boost score for documents with highly relevant sections
+                    original_score = result.get("score", 0)
+                    section_boost = best_section["section_score"] * 0.1  # Small boost
+                    section_result["score"] = original_score + section_boost
+
+                    reranked_results.append(section_result)
+                else:
+                    # No sections found, keep original
+                    reranked_results.append(result)
+
+            # Re-sort by the updated scores
+            reranked_results.sort(key=lambda x: x.get("score", 0), reverse=True)
+
+            # Return top results
+            return reranked_results[:limit]
+
+        except Exception as e:
+            logger.warning(f"Section-level reranking failed: {e}")
+            # Fall back to original results
+            return results
+
     async def _hybrid_search_query(
         self,
         question_embedding: List[float],

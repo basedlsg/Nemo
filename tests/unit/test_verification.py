@@ -97,8 +97,9 @@ class TestVerificationCandidate:
         not_verified_data["verification_status"] = VerificationStatus.FAILED
         candidate = VerificationCandidate(**not_verified_data)
         assert candidate.get_combined_confidence() == 0.0
-class T
-estCSESearchResult:
+
+
+class TestCSESearchResult:
     """Test CSESearchResult model."""
     
     @pytest.fixture

@@ -5,6 +5,7 @@ import os
 import tempfile
 from typing import List, Dict, Any, Optional
 from datetime import datetime
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Query, BackgroundTasks
 from fastapi.responses import FileResponse, JSONResponse
@@ -20,10 +21,39 @@ from services.citation.pack_generator import (
 
 logger = logging.getLogger(__name__)
 
+
+# ---- lifespan ------------------------------------------------------------------
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup logic
+    logger.info("Citation Pack Service starting up...")
+
+    try:
+        # Initialize pack generator
+        generator = await get_pack_generator()
+        logger.info("Pack generator initialized successfully")
+
+    except Exception as e:
+        logger.error(f"Failed to initialize pack generator: {e}")
+
+    yield
+
+    # Shutdown logic
+    logger.info("Citation Pack Service shutting down...")
+
+    try:
+        await cleanup_pack_generator()
+        logger.info("Pack generator cleaned up successfully")
+
+    except Exception as e:
+        logger.error(f"Failed to cleanup pack generator: {e}")
+
+
 app = FastAPI(
     title="Citation Pack Service",
     description="Generate citation packs with Chinese PDF support",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan,
 )
 
 
@@ -292,31 +322,7 @@ async def cleanup_temp_file(file_path: str):
         logger.warning(f"Failed to cleanup temp file {file_path}: {e}")
 
 
-@app.on_event("startup")
-async def startup_event():
-    """Initialize service on startup."""
-    logger.info("Citation Pack Service starting up...")
-    
-    try:
-        # Initialize pack generator
-        generator = await get_pack_generator()
-        logger.info("Pack generator initialized successfully")
-        
-    except Exception as e:
-        logger.error(f"Failed to initialize pack generator: {e}")
 
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Cleanup on shutdown."""
-    logger.info("Citation Pack Service shutting down...")
-    
-    try:
-        await cleanup_pack_generator()
-        logger.info("Pack generator cleaned up successfully")
-        
-    except Exception as e:
-        logger.error(f"Failed to cleanup pack generator: {e}")
 
 
 if __name__ == "__main__":

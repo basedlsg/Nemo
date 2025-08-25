@@ -2,6 +2,7 @@
 import logging
 from typing import Dict, Any, List, Optional
 from datetime import datetime
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.responses import JSONResponse
@@ -20,10 +21,41 @@ from services.orchestrator.research_orchestrator import (
 
 logger = logging.getLogger(__name__)
 
+
+# ---- lifespan ------------------------------------------------------------------
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup logic
+    logger.info("Research Orchestrator Service starting up...")
+
+    try:
+        # Initialize orchestrator
+        orchestrator = await get_research_orchestrator()
+        logger.info("Research orchestrator initialized successfully")
+
+    except Exception as e:
+        logger.error(f"Failed to initialize research orchestrator: {e}")
+
+    yield
+
+    # Shutdown logic
+    logger.info("Research Orchestrator Service shutting down...")
+
+    try:
+        # Cleanup orchestrator
+        orchestrator = await get_research_orchestrator()
+        await orchestrator.cleanup()
+        logger.info("Research orchestrator cleaned up successfully")
+
+    except Exception as e:
+        logger.error(f"Failed to cleanup research orchestrator: {e}")
+
+
 app = FastAPI(
     title="Research Orchestrator Service",
     description="Orchestrate discovery → verification → ingestion research pipeline",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan,
 )
 
 
@@ -348,33 +380,7 @@ async def health_check():
         )
 
 
-@app.on_event("startup")
-async def startup_event():
-    """Initialize service on startup."""
-    logger.info("Research Orchestrator Service starting up...")
-    
-    try:
-        # Initialize orchestrator
-        orchestrator = await get_research_orchestrator()
-        logger.info("Research orchestrator initialized successfully")
-        
-    except Exception as e:
-        logger.error(f"Failed to initialize research orchestrator: {e}")
 
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Cleanup on shutdown."""
-    logger.info("Research Orchestrator Service shutting down...")
-    
-    try:
-        # Cleanup orchestrator
-        orchestrator = await get_research_orchestrator()
-        await orchestrator.cleanup()
-        logger.info("Research orchestrator cleaned up successfully")
-        
-    except Exception as e:
-        logger.error(f"Failed to cleanup research orchestrator: {e}")
 
 
 if __name__ == "__main__":

@@ -53,17 +53,21 @@ async def test_gateway_with_proper_format(session):
                 print("   ✅ Gateway query successful!")
                 
                 # Show response details
-                if 'answer' in data:
-                    answer = data['answer'][:100] + "..."
+                if 'answer_zh' in data:
+                    answer = data['answer_zh'][:100] + "..."
                     print(f"   💡 Answer: {answer}")
-                
+
                 if 'citations' in data:
                     citations = data['citations']
                     print(f"   📚 Citations: {len(citations)}")
-                
-                if 'metadata' in data:
-                    metadata = data['metadata']
-                    print(f"   📊 Metadata: {metadata}")
+                    for i, citation in enumerate(citations[:2]):
+                        print(f"      {i+1}. {citation.get('title', 'No title')}")
+
+                if 'total_citations' in data:
+                    print(f"   📊 Total Citations: {data['total_citations']}")
+
+                if 'processing_time_ms' in data:
+                    print(f"   ⚡ Processing Time: {data['processing_time_ms']}ms")
                 
                 return True
             else:

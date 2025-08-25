@@ -3,6 +3,7 @@ import logging
 import time
 import json
 from typing import List
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
@@ -43,11 +44,38 @@ logger.addHandler(_get_json_log_handler())
 logger.propagate = False
 
 
+# ---- lifespan ------------------------------------------------------------------
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup logic
+    logger.info("Gateway starting up...")
+
+    # Log configuration details
+    config_details = {
+        "allowed_origins": ALLOWED_ORIGINS,
+        "log_level": logger.level,
+        "query_mode_set": bool(os.getenv("QUERY_MODE")),
+        "pplx_api_key_set": bool(os.getenv("PPLX_API_KEY")),
+        "google_api_key_set": bool(os.getenv("GOOGLE_API_KEY")),
+        "google_cse_id_set": bool(os.getenv("GOOGLE_CSE_ID")),
+        "allowlist_domains_set": bool(os.getenv("ALLOWLIST_DOMAINS")),
+    }
+    logger.info("Application configuration", extra={"extra_context": config_details})
+
+    logger.info("Routers mounted", extra={"extra_context": {"routers": ["/_health", "/api/v1/health", "/api/v1/query"]}})
+
+    yield
+
+    # Shutdown logic (if needed)
+    logger.info("Gateway shutting down...")
+
+
 # ---- app ----------------------------------------------------------------------
 app = FastAPI(
     title="Gaea Gateway",
     description="Public gateway for Chinese energy docs QA (online-only).",
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 @app.middleware("http")
@@ -123,21 +151,3 @@ def root():
     }
 
 app.include_router(query_online.router, prefix="/api/v1")
-
-@app.on_event("startup")
-async def on_startup():
-    logger.info("Gateway starting up...")
-    
-    # Log configuration details
-    config_details = {
-        "allowed_origins": ALLOWED_ORIGINS,
-        "log_level": logger.level,
-        "query_mode_set": bool(os.getenv("QUERY_MODE")),
-        "pplx_api_key_set": bool(os.getenv("PPLX_API_KEY")),
-        "google_api_key_set": bool(os.getenv("GOOGLE_API_KEY")),
-        "google_cse_id_set": bool(os.getenv("GOOGLE_CSE_ID")),
-        "allowlist_domains_set": bool(os.getenv("ALLOWLIST_DOMAINS")),
-    }
-    logger.info("Application configuration", extra={"extra_context": config_details})
-    
-    logger.info("Routers mounted", extra={"extra_context": {"routers": ["/_health", "/api/v1/health", "/api/v1/query"]}})

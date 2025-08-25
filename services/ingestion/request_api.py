@@ -2,6 +2,7 @@
 import logging
 from typing import Dict, Any, List, Optional
 from datetime import datetime
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Query, Depends
 from fastapi.responses import JSONResponse
@@ -20,10 +21,32 @@ from services.ingestion.request_handler import (
 
 logger = logging.getLogger(__name__)
 
+
+# ---- lifespan ------------------------------------------------------------------
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup logic
+    logger.info("Ingestion Request Service starting up...")
+
+    try:
+        # Initialize request handler
+        handler = await get_request_handler()
+        logger.info("Request handler initialized successfully")
+
+    except Exception as e:
+        logger.error(f"Failed to initialize request handler: {e}")
+
+    yield
+
+    # Shutdown logic
+    logger.info("Ingestion Request Service shutting down...")
+
+
 app = FastAPI(
     title="Ingestion Request Service",
     description="Handle ingestion requests for missing regulatory data",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan,
 )
 
 
@@ -349,24 +372,7 @@ async def health_check():
         )
 
 
-@app.on_event("startup")
-async def startup_event():
-    """Initialize service on startup."""
-    logger.info("Ingestion Request Service starting up...")
-    
-    try:
-        # Initialize request handler
-        handler = await get_request_handler()
-        logger.info("Request handler initialized successfully")
-        
-    except Exception as e:
-        logger.error(f"Failed to initialize request handler: {e}")
 
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Cleanup on shutdown."""
-    logger.info("Ingestion Request Service shutting down...")
 
 
 if __name__ == "__main__":

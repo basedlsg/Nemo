@@ -587,6 +587,8 @@ export default function Home() {
           asset: asset === "none" ? null : asset,
           question: trimmed,
           lang: lang,
+          allow_national_fallback: false,
+          year: null,
         }),
       });
 
@@ -595,7 +597,19 @@ export default function Home() {
       console.log("API Response Data:", JSON.stringify(data, null, 2));
 
       if (res.status === 200) {
-        setResponse(data);
+        if (data.status === "refused") {
+          // Handle refusal response
+          setError({
+            refusal_code: data.reason,
+            message: lang === "zh-CN" ? "查询被拒绝" : "Query refused",
+            suggestion: lang === "zh-CN" ? "请尝试不同的查询或联系管理员" : "Please try a different query or contact administrator",
+            policy_violated: data.policy,
+            can_request_ingestion: false,
+            trace_id: data.diagnostics?.trace_id
+          });
+        } else {
+          setResponse(data);
+        }
       } else {
         setError(data);
       }
@@ -903,11 +917,11 @@ export default function Home() {
                 marginBottom: "1.5rem",
                 fontSize: "0.95rem"
               }}
-              dangerouslySetInnerHTML={{ __html: response.answer_zh.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') }}
+              dangerouslySetInnerHTML={{ __html: (response.answer_zh || response.bullets?.join('<br>') || '').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') }}
             />
 
             {/* Citations */}
-            {response.citations.length > 0 && (
+            {(response.citations?.length > 0 || response.bullets?.length > 0) && (
               <div>
                 <h4 style={{ 
                   fontSize: "1rem", 
@@ -922,7 +936,7 @@ export default function Home() {
                   padding: 0, 
                   margin: 0 
                 }}>
-                  {response.citations.map((citation, index) => (
+                  {(response.citations || response.bullets || []).map((citation, index) => (
                     <li key={index} style={{
                       padding: "0.75rem",
                       background: "#f7fafc",
@@ -932,24 +946,26 @@ export default function Home() {
                       fontSize: "0.875rem"
                     }}>
                       <div style={{ fontWeight: 500, color: "#2d3748" }}>
-                        《{citation.title}》
+                        {typeof citation === 'string' ? citation : citation.title || citation}
                       </div>
-                      <div style={{ color: "#718096", marginTop: "0.25rem" }}>
-                        {lang === "zh-CN" ? "生效日期" : "Effective Date"}: {citation.effective_date}
-                        {citation.url && (
-                          <>
-                            {" | "}
-                            <a 
-                              href={citation.url} 
-                              target="_blank" 
-                              rel="noopener noreferrer"
-                              style={{ color: "#3182ce", textDecoration: "none" }}
-                            >
-                              {lang === "zh-CN" ? "查看原文" : "View Source"}
-                            </a>
-                          </>
-                        )}
-                      </div>
+                      {typeof citation === 'object' && citation.url && (
+                        <div style={{ color: "#718096", marginTop: "0.25rem" }}>
+                          {citation.effective_date && (
+                            <>
+                              {lang === "zh-CN" ? "生效日期" : "Effective Date"}: {citation.effective_date}
+                              {" | "}
+                            </>
+                          )}
+                          <a 
+                            href={citation.url} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            style={{ color: "#3182ce", textDecoration: "none" }}
+                          >
+                            {lang === "zh-CN" ? "查看原文" : "View Source"}
+                          </a>
+                        </div>
+                      )}
                     </li>
                   ))}
                 </ul>
@@ -957,14 +973,16 @@ export default function Home() {
             )}
 
             {/* Trace ID */}
-            <div style={{ 
-              fontSize: "0.75rem", 
-              color: "#a0aec0", 
-              marginTop: "1rem",
-              textAlign: "right"
-            }}>
-              Trace ID: {response.trace_id}
-            </div>
+            {response.trace_id && (
+              <div style={{ 
+                fontSize: "0.75rem", 
+                color: "#a0aec0", 
+                marginTop: "1rem",
+                textAlign: "right"
+              }}>
+                Trace ID: {response.trace_id}
+              </div>
+            )}
           </div>
         )}
 

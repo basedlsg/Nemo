@@ -59,26 +59,59 @@ class RefusalException(Exception):
         }
 
 
+# PR2: Hard Guardrails - wenhao + agency + year validation
+WENHAO_PATTERNS = {
+    "guangdong": r"^粤.*〔20\d{2}〕\d+号$",
+    "beijing": r"^京.*〔20\d{2}〕\d+号$",
+    "shanghai": r"^沪.*〔20\d{2}〕\d+号$",
+    "shandong": r"^鲁.*〔20\d{2}〕\d+号$",
+    "inner_mongolia": r"^内.*〔20\d{2}〕\d+号$",
+}
+AGENCY_ALLOW = {
+    "guangdong": ["广东省能源局", "广东省发展和改革委员会", "广东电网", "南方电网", "广东电力交易中心"],
+    "beijing": ["北京市发展和改革委员会", "北京市能源局", "北京电网", "国家电网北京市电力公司"],
+    "shanghai": ["上海市发展和改革委员会", "上海市经济信息化委员会", "上海电网", "国家电网上海市电力公司"],
+    "shandong": ["山东省发展和改革委员会", "山东省能源局", "山东电网", "国家电网山东省电力公司"],
+    "inner_mongolia": ["内蒙古自治区发展和改革委员会", "内蒙古自治区能源局", "内蒙古电网", "国家电网内蒙古电力公司"],
+}
+
+
+def _validate_meta(meta: dict, province: str, req_year: int | None):
+    """PR2: Validate provincial document metadata."""
+    import re
+    wenhao_ok = bool(re.match(WENHAO_PATTERNS.get(province, r".*"), meta.get("wenhao", "")))
+    agency_ok = any(a in (meta.get("agency", "") or "") for a in AGENCY_ALLOW.get(province, []))
+    year_ok = True if not req_year else str(req_year) in (meta.get("effective_date", "") or "")
+
+    if not wenhao_ok:
+        raise RefusalException("missing_wenhao", detail="province_wenhao_pattern_failed")
+    if not agency_ok:
+        raise RefusalException("agency_mismatch", detail="not_provincial_agency")
+    if not year_ok:
+        raise RefusalException("year_mismatch", detail="effective_date_out_of_range")
+    return True
+
+
 class GuardrailsPolicy:
     """Individual guardrails policy implementation."""
-    
+
     def __init__(self, name: str, description: str):
         """Initialize policy."""
         self.name = name
         self.description = description
-    
+
     def check(self, answer: str, citations: List[Dict[str, Any]], query: Dict[str, Any]) -> bool:
         """
         Check if policy is satisfied.
-        
+
         Args:
             answer: Generated answer text
             citations: List of citations used
             query: Original query parameters
-            
+
         Returns:
             True if policy is satisfied
-            
+
         Raises:
             RefusalException: If policy is violated
         """
@@ -213,7 +246,16 @@ class UnsafeScopePolicy(GuardrailsPolicy):
                     "Citation has been superseded by newer regulation",
                     "current_regulation_required"
                 )
-        
+
+        # PR2: Validate provincial document metadata (wenhao, agency, year)
+        req_year = query.get("year")
+        for citation in citations:
+            if "metadata" in citation:
+                _validate_meta(citation["metadata"], province, req_year)
+            elif any(key in citation for key in ["wenhao", "agency", "effective_date"]):
+                # Citation has metadata fields directly
+                _validate_meta(citation, province, req_year)
+
         return True
     
     def _extract_domain_from_url(self, url: str) -> str:

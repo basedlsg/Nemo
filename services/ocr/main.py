@@ -3,6 +3,7 @@
 import logging
 import os
 from typing import Dict, Any, List, Optional
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends
 from fastapi.responses import PlainTextResponse
@@ -24,11 +25,55 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
+# ---- lifespan ------------------------------------------------------------------
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global worker
+
+    # Startup logic
+    try:
+        logger.info("Starting OCR service...")
+
+        # Initialize Document AI client
+        docai_client = DocAIClient(config)
+
+        # Initialize storage client
+        storage_client = GCSStorageClient(config.project_id)
+
+        # Initialize database connection
+        try:
+            db_connection = get_database_connection()
+            citation_crud = CitationCRUD(db_connection)
+        except Exception as e:
+            logger.warning(f"Database connection failed, running without DB: {e}")
+            citation_crud = None
+
+        # Initialize worker
+        worker = OcrWorker(
+            docai_client=docai_client,
+            storage_client=storage_client,
+            citation_crud=citation_crud,
+            metrics_collector=metrics_collector
+        )
+
+        logger.info("OCR service started successfully")
+
+    except Exception as e:
+        logger.error(f"Failed to start OCR service: {e}")
+        raise
+
+    yield
+
+    # Shutdown logic
+    logger.info("Shutting down OCR service...")
+
+
 # Initialize FastAPI app
 app = FastAPI(
     title="OCR Service",
     description="Chinese document OCR and text extraction service",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan,
 )
 
 # Global components
@@ -57,47 +102,7 @@ class BatchOcrTrigger(BaseModel):
     jobs: List[OcrTrigger]
 
 
-@app.on_event("startup")
-async def startup_event():
-    """Initialize service components on startup."""
-    global worker
-    
-    try:
-        logger.info("Starting OCR service...")
-        
-        # Initialize Document AI client
-        docai_client = DocAIClient(config)
-        
-        # Initialize storage client
-        storage_client = GCSStorageClient(config.project_id)
-        
-        # Initialize database connection
-        try:
-            db_connection = get_database_connection()
-            citation_crud = CitationCRUD(db_connection)
-        except Exception as e:
-            logger.warning(f"Database connection failed, running without DB: {e}")
-            citation_crud = None
-        
-        # Initialize worker
-        worker = OcrWorker(
-            docai_client=docai_client,
-            storage_client=storage_client,
-            citation_crud=citation_crud,
-            metrics_collector=metrics_collector
-        )
-        
-        logger.info("OCR service started successfully")
-        
-    except Exception as e:
-        logger.error(f"Failed to start OCR service: {e}")
-        raise
 
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Cleanup on service shutdown."""
-    logger.info("Shutting down OCR service...")
 
 
 @app.get("/health")

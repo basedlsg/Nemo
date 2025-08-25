@@ -68,17 +68,21 @@ class ChineseAnswerComposer:
         query: Dict[str, Any],
         max_citations: int = 10
     ) -> Dict[str, Any]:
-        """
-        Compose Chinese answer with inline citations.
-        
-        Args:
-            search_results: Results from retriever service
-            query: Original query parameters
-            max_citations: Maximum citations to include
-            
-        Returns:
-            Composed answer with citations and metadata
-        """
+        """Compose answer using Gemini if enabled, otherwise use template-based approach."""
+        # Check if Gemini composer is enabled
+        import os
+        use_gemini = os.getenv("FEATURE_GEMINI_COMPOSER", "false").lower() == "true"
+
+        if use_gemini:
+            try:
+                from services.gemini.composer import GeminiAnswerComposer
+                gemini_composer = GeminiAnswerComposer()
+                return gemini_composer.compose_answer(search_results, query, max_citations)
+            except Exception as e:
+                logger.warning(f"Gemini composer failed, falling back to template: {e}")
+                # Fall through to template-based approach
+
+        # Original template-based approach
         try:
             if not search_results:
                 return self._create_refusal_response("没有找到相关的一手资料")
